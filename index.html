@@ -70,7 +70,7 @@ textarea{resize:vertical;min-height:72px}
   <div class="card">
     <h2>📍 Outlet Pemesanan</h2>
     <div class="field"><label>Outlet tujuan</label><input id="outlet" readonly placeholder="Outlet otomatis dari QR Code"></div>
-    <div class="notice" id="outletNotice">Outlet ditentukan otomatis dari QR Code yang dipindai.</div>
+    <div class="notice hidden" id="outletNotice" aria-live="polite"></div>
   </div>
   <div class="card">
     <h2>🍽️ Pilih Menu</h2><p class="section-sub">Pilih kategori, lalu tekan Tambah untuk memasukkan menu ke keranjang.</p>
@@ -95,6 +95,15 @@ textarea{resize:vertical;min-height:72px}
       <div class="field" id="qrisProofField"><label for="qrisProof">Bukti pembayaran QRIS * (wajib)</label><input id="qrisProof" type="file" accept="image/jpeg,image/png,image/webp" onchange="validateQrisProof()"><small id="qrisProofHint" style="display:block;color:var(--muted);margin-top:5px">JPG, PNG, atau WEBP. Maksimum 5 MB.</small></div>
     </div>
   </div>
+  <section class="card hidden" id="trackingCard" aria-live="polite">
+    <h2>📦 Lacak Pesanan</h2>
+    <p class="section-sub">Status pesanan diperbarui otomatis setiap 3 detik.</p>
+    <div class="tracking-meta"><span>Nomor pesanan</span><strong id="trackingOrderId">-</strong></div>
+    <div class="tracking-meta"><span>Status pembayaran</span><strong id="trackingPayment">-</strong></div>
+    <div class="tracking-status" id="trackingStatus">Menunggu pembaruan status…</div>
+    <div class="tracking-time" id="trackingUpdated">Memeriksa status pesanan…</div>
+    <button type="button" class="secondary-btn" id="stopTracking" onclick="stopOrderTracking()">Tutup pelacakan</button>
+  </section>
 </main>
 <aside>
   <div class="card cart-card">
@@ -120,11 +129,11 @@ let isReady=false,isSubmitting=false;
 const rupiah=n=>'Rp '+Number(n||0).toLocaleString('id-ID');
 const $=id=>document.getElementById(id);
 function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function setNotice(message,type){$('outletNotice').textContent=message;$('outletNotice').className='notice'+(type?' '+type:'');}
+function setNotice(message,type){$('outletNotice').textContent=message;$('outletNotice').className='notice'+(type?' '+type:'');if(type==='error')$('outletNotice').classList.remove('hidden');}
 function buildApiUrl(action){if(!apiBase)throw new Error('URL Web App GAS POS belum dipasang pada QR.');const url=new URL(apiBase,location.href);url.searchParams.set('action',action);if(outletParam)url.searchParams.set('outlet',outletParam);return url.toString();}
 async function apiGet(action){const response=await fetch(buildApiUrl(action),{method:'GET',cache:'no-store'});if(!response.ok)throw new Error('API POS merespons HTTP '+response.status);const data=await response.json();if(data.status==='error'||data.ok===false)throw new Error(data.message||'Permintaan ke backend gagal.');return data;}
 function initOrderConfig(){const types=[['PICKUP','Ambil di outlet (Pickup)','pickup'],['DINEIN','Makan di tempat (Dine In)','dinein'],['DELIVERY','Diantar (Delivery)','delivery']];$('orderType').innerHTML='<option value="">Pilih jenis pesanan</option>'+types.filter(x=>orderConfig[x[2]]).map(x=>`<option value="${x[0]}">${x[1]}</option>`).join('');const payments=[['CASH','Cash','cash'],['QRIS','QRIS','qris'],['TRANSFER','Transfer','transfer']];$('payment').innerHTML='<option value="">Pilih metode pembayaran</option>'+payments.filter(x=>orderConfig[x[2]]).map(x=>`<option value="${x[0]}">${x[1]}</option>`).join('');if(!$('orderType').options.length||$('orderType').options.length===1)$('orderType').innerHTML='<option value="">Tidak ada jenis pesanan aktif</option>';if(!$('payment').options.length||$('payment').options.length===1)$('payment').innerHTML='<option value="">Tidak ada metode pembayaran aktif</option>';}
-async function loadConfig(){const data=await apiGet('getOnlineOrderConfig');orderConfig=data.config||{};qrisImageUrl=data.qrisImageUrl||'';$('outlet').value=data.outletName||outletParam;$('outletStatus').textContent='● Outlet Online';$('outletStatus').className='badge';setNotice('Outlet '+(data.outletName||outletParam)+' siap menerima pesanan. Tujuan pesanan mengikuti QR yang dipindai.','success');initOrderConfig();if(qrisImageUrl){$('qrisImage').src=qrisImageUrl;$('qrisImage').classList.remove('hidden');$('qrisInstruction').textContent='Scan QRIS berikut, selesaikan pembayaran, lalu unggah bukti pembayaran.';}else{$('qrisInstruction').textContent='QRIS belum diatur oleh outlet. Metode QRIS tidak akan ditampilkan.';}}
+async function loadConfig(){const data=await apiGet('getOnlineOrderConfig');orderConfig=data.config||{};qrisImageUrl=data.qrisImageUrl||'';$('outlet').value=data.outletName||outletParam;$('outletStatus').textContent='● Outlet Online';$('outletStatus').className='badge';$('outletNotice').classList.add('hidden');initOrderConfig();if(qrisImageUrl){$('qrisImage').src=qrisImageUrl;$('qrisImage').classList.remove('hidden');$('qrisInstruction').textContent='Scan QRIS berikut, selesaikan pembayaran, lalu unggah bukti pembayaran.';}else{$('qrisInstruction').textContent='QRIS belum diatur oleh outlet. Metode QRIS tidak akan ditampilkan.';}}
 async function loadMenus(){const data=await apiGet('getOnlineOrderProducts');products=(data.products||[]).filter(p=>p.active!==false).map((p,i)=>({id:String(p.id??p.productId??i+1),name:String(p.name??p.nama??''),category:String(p.category??p.kategori??'Menu'),price:Number(p.price??p.harga??0),icon:p.icon||'🍽️'})).filter(p=>p.name&&Number.isFinite(p.price));category='Semua';renderCategories();renderMenus();renderCart();if(!products.length)$('menus').innerHTML='<div class="notice">Belum ada menu untuk brand outlet ini pada sheet Products POS.</div>';}
 function renderCategories(){const cats=['Semua',...new Set(products.map(p=>p.category))];$('categories').innerHTML=cats.map(c=>`<button type="button" class="${c===category?'active':''}" data-category="${escapeHtml(c)}" aria-pressed="${c===category?'true':'false'}">${escapeHtml(c)}</button>`).join('');}
 function selectCategory(c){category=String(c);renderCategories();renderMenus();}
@@ -149,13 +158,67 @@ async function submitOrder(){if(isSubmitting)return;const customer=$('customer')
   try{let proof=null;if(payment==='QRIS'){const f=$('qrisProof').files[0];proof={data:await fileAsDataUrl(f),mimeType:f.type,name:f.name};}const payload={action:'submitOnlineOrder',outlet:outletParam,customer:customer,phone:phone,orderType:orderType,payment:payment,address:address,notes:notes,items:ids.map(id=>({productId:id,qty:cart[id]})),proof:proof};
     // text/plain menghindari preflight OPTIONS saat form publik memanggil Apps Script.
     const response=await fetch(apiBase,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)});if(!response.ok)throw new Error('Backend merespons HTTP '+response.status);const data=await response.json();if(data.status!=='success'&&data.ok!==true)throw new Error(data.message||'Pesanan gagal disimpan.');
-    const statusLabel=payment==='QRIS'?'Menunggu verifikasi pembayaran':payment==='TRANSFER'?'Menunggu pembayaran':'Menunggu diproses';$('result').innerHTML=`<div style="background:#f8fafc;border-radius:12px;padding:14px;font-size:13px;line-height:1.8"><b>Order ID:</b> ${escapeHtml(data.orderId)}<br><b>Outlet:</b> ${escapeHtml($('outlet').value)}<br><b>Nama:</b> ${escapeHtml(customer)}<br><b>WhatsApp:</b> ${escapeHtml(phone)}<br><b>Jenis pesanan:</b> ${escapeHtml(orderType)}<br><b>Subtotal:</b> ${rupiah(data.subtotal)}<br><b>Biaya delivery:</b> ${rupiah(data.deliveryFee)}<br><b>Total:</b> <strong>${rupiah(data.total)}</strong><br><b>Pembayaran:</b> ${escapeHtml(payment)}<br><b>Status:</b> ${escapeHtml(statusLabel)}</div><p style="font-size:12px;color:#64748b">Pesanan sudah tersimpan pada sistem Online Order AE POS.</p>`;$('modal').classList.remove('hidden');cart={};renderCart();$('customer').value='';$('phone').value='';$('address').value='';$('notes').value='';$('orderType').value='';$('payment').value='';$('qrisProof').value='';$('qrisPaymentArea').classList.add('hidden');$('addressField').classList.add('hidden');
+    const statusLabel=payment==='QRIS'?'Menunggu verifikasi pembayaran':payment==='TRANSFER'?'Menunggu pembayaran':'Menunggu diproses';$('result').innerHTML=`<div style="background:#f8fafc;border-radius:12px;padding:14px;font-size:13px;line-height:1.8"><b>Order ID:</b> ${escapeHtml(data.orderId)}<br><b>Outlet:</b> ${escapeHtml($('outlet').value)}<br><b>Nama:</b> ${escapeHtml(customer)}<br><b>WhatsApp:</b> ${escapeHtml(phone)}<br><b>Jenis pesanan:</b> ${escapeHtml(orderType)}<br><b>Subtotal:</b> ${rupiah(data.subtotal)}<br><b>Biaya delivery:</b> ${rupiah(data.deliveryFee)}<br><b>Total:</b> <strong>${rupiah(data.total)}</strong><br><b>Pembayaran:</b> ${escapeHtml(payment)}<br><b>Status:</b> ${escapeHtml(statusLabel)}</div><p style="font-size:12px;color:#64748b">Pesanan sudah tersimpan pada sistem Online Order AE POS.</p>`;$('modal').classList.remove('hidden');startOrderTracking(data.orderId,phone);cart={};renderCart();$('customer').value='';$('phone').value='';$('address').value='';$('notes').value='';$('orderType').value='';$('payment').value='';$('qrisProof').value='';$('qrisPaymentArea').classList.add('hidden');$('addressField').classList.add('hidden');
   }catch(err){console.error(err);alert('Pesanan gagal dikirim: '+err.message);}finally{isSubmitting=false;$('submit').textContent='Pesan Sekarang';renderCart();}}
-function closeModal(){$('modal').classList.add('hidden');}
+const ORDER_STATUS_LABELS={NEW:'Pesanan diterima outlet',ACCEPTED:'Pesanan dikonfirmasi outlet',PREPARING:'Pesanan sedang disiapkan',READY:'Pesanan siap diambil / diantar',COMPLETED:'Pesanan selesai',REJECTED:'Pesanan ditolak outlet',CANCELLED:'Pesanan dibatalkan'};
+const PAYMENT_STATUS_LABELS={WAITING_VERIFICATION:'Menunggu verifikasi pembayaran',WAITING_PAYMENT:'Menunggu pembayaran',UNPAID:'Belum dibayar',PAID:'Pembayaran berhasil',REJECTED:'Pembayaran ditolak'};
+let trackingTimer=null,trackedOrder=null;
+function renderTracking(data){
+  $('trackingCard').classList.remove('hidden');
+  $('trackingOrderId').textContent=data.orderId||trackedOrder.orderId;
+  $('trackingPayment').textContent=PAYMENT_STATUS_LABELS[data.paymentStatus]||data.paymentStatus||'-';
+  $('trackingStatus').textContent=ORDER_STATUS_LABELS[data.orderStatus]||data.orderStatus||'Status belum tersedia';
+  $('trackingUpdated').textContent='Pembaruan otomatis setiap 3 detik • Terakhir dicek '+new Date().toLocaleTimeString('id-ID');
+  const terminal=['COMPLETED','REJECTED','CANCELLED'].includes(String(data.orderStatus||'').toUpperCase());
+  if(terminal) stopOrderTracking(false);
+}
+async function refreshOrderTracking(){
+  if(!trackedOrder)return;
+  try{
+    const url=new URL(apiBase,location.href);
+    url.searchParams.set('action','getOnlineOrderStatus');
+    url.searchParams.set('orderId',trackedOrder.orderId);
+    url.searchParams.set('phone',trackedOrder.phone);
+    const res=await fetch(url.toString(),{method:'GET',cache:'no-store'});
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    const data=await res.json();
+    if(data.status!=='success')throw new Error(data.message||'Status belum dapat dimuat.');
+    renderTracking(data);
+  }catch(err){
+    $('trackingCard').classList.remove('hidden');
+    $('trackingStatus').textContent='Belum dapat memperbarui status. Akan dicoba kembali otomatis.';
+    $('trackingUpdated').textContent='Periksa koneksi internet Anda.';
+  }
+}
+function startOrderTracking(orderId,phone){
+  trackedOrder={orderId:String(orderId),phone:String(phone).replace(/[^\d+]/g,'')};
+  try{sessionStorage.setItem('ae_online_order_tracking',JSON.stringify(trackedOrder));}catch(e){}
+  $('trackingCard').classList.remove('hidden');
+  $('trackingOrderId').textContent=trackedOrder.orderId;
+  $('trackingStatus').textContent='Pesanan berhasil dikirim. Menunggu konfirmasi outlet…';
+  refreshOrderTracking();
+  if(trackingTimer)clearInterval(trackingTimer);
+  trackingTimer=setInterval(refreshOrderTracking,3000);
+}
+function stopOrderTracking(clear=true){
+  if(trackingTimer){clearInterval(trackingTimer);trackingTimer=null;}
+  if(clear){
+    trackedOrder=null;
+    try{sessionStorage.removeItem('ae_online_order_tracking');}catch(e){}
+    $('trackingCard').classList.add('hidden');
+  }
+}
+function restoreOrderTracking(){
+  try{
+    const saved=JSON.parse(sessionStorage.getItem('ae_online_order_tracking')||'null');
+    if(saved&&saved.orderId&&saved.phone)startOrderTracking(saved.orderId,saved.phone);
+  }catch(e){}
+}
+function closeModal(){$('modal').classList.add('hidden');$('trackingCard').scrollIntoView({behavior:'smooth',block:'center'});}
 bindDynamicControls();
 (async function init(){
   if(!outletParam||!apiBase){$('outletStatus').textContent='QR belum lengkap';$('outletStatus').className='badge off';setNotice(!outletParam?'Parameter outlet tidak ditemukan pada QR Code.':'URL API GAS POS belum dipasang pada QR Code.','error');$('menus').innerHTML='<div class="notice error">Form tidak dapat digunakan. Buka melalui QR outlet yang memiliki parameter outlet dan api.</div>';return;}
-  try{await loadConfig();await loadMenus();isReady=true;$('cartNotice').textContent='Menu, layanan, dan pembayaran berhasil dimuat dari backend POS.';renderCart();if(!Object.keys(orderConfig).some(k=>['pickup','dinein','delivery'].includes(k)&&orderConfig[k]))$('cartNotice').textContent='Outlet belum mengaktifkan jenis pesanan.';}
+  try{await loadConfig();await loadMenus();isReady=true;restoreOrderTracking();$('cartNotice').textContent='Menu, layanan, dan pembayaran berhasil dimuat dari backend POS.';renderCart();if(!Object.keys(orderConfig).some(k=>['pickup','dinein','delivery'].includes(k)&&orderConfig[k]))$('cartNotice').textContent='Outlet belum mengaktifkan jenis pesanan.';}
   catch(err){console.error(err);$('outletStatus').textContent='Koneksi gagal';$('outletStatus').className='badge off';setNotice('Gagal memuat konfigurasi outlet: '+err.message,'error');$('menus').innerHTML='<div class="notice error">'+escapeHtml(err.message)+'</div>';}
 })();
 </script>
