@@ -1,345 +1,2110 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#5547e8">
-<meta name="description" content="Pesan menu favorit dari outlet AE POS dengan mudah.">
-<title>Online Order | AE POS</title>
-<!-- Tracking diagnostic V8: tampilkan pesan error asli dari endpoint POS -->
-<style>
-:root{
-  --brand:#5547e8;--brand-dark:#4034c9;--brand-soft:#efedff;
-  --bg:#f4f6fb;--surface:#fff;--text:#182235;--muted:#728096;
-  --line:#e7eaf2;--green:#159b68;--red:#d94755;--shadow:0 12px 34px rgba(29,42,78,.07)
+/**
+ * KASIRKU POS PRO - GOOGLE APPS SCRIPT BACKEND (PERBAIKAN)
+ * Data terpusat POS, Account Executive, menu, akun, event/satelit dan shift.
+ *
+ * PENTING:
+ * 1. Setelah mengganti kode, simpan lalu Deploy > Manage deployments > Edit > New version > Deploy.
+ * 2. Pastikan HTML POS memakai URL Web App deployment yang terbaru.
+ * 3. Transaksi tetap disimpan di sheet Transactions. Kolom Items JSON ditambahkan untuk
+ *    menyimpan detail item terstruktur agar dashboard bisa menghitung jumlah/menu terjual.
+ */
+
+const SS = SpreadsheetApp.getActiveSpreadsheet();
+
+const TRANSACTION_HEADERS = [
+  'Invoice ID', 'Tanggal', 'Kasir', 'Metode Bayar', 'Item Detail',
+  'Subtotal', 'Diskon', 'Total', 'Tunai', 'Kembalian', 'Resto',
+  'Brand', 'Sumber Omset', 'Shift ID', 'Status Shift', 'Tanggal ISO',
+  'Items JSON', 'POS Username', 'AE Pencapaian'
+];
+
+function jsonOut_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
 }
-*{box-sizing:border-box}
-html{min-height:100%;scroll-behavior:smooth}
-body{margin:0;background:radial-gradient(circle at 5% 0%,#ecebff 0,transparent 25rem),var(--bg);font-family:Inter,"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--text);-webkit-font-smoothing:antialiased}
-button,input,select,textarea{font:inherit}
-button{touch-action:manipulation}
-header{background:rgba(255,255,255,.92);backdrop-filter:blur(16px);border-bottom:1px solid rgba(226,231,241,.9);position:sticky;top:0;z-index:20}
-.header-inner{max-width:1160px;margin:auto;padding:13px 22px;display:flex;align-items:center;justify-content:space-between;gap:14px}
-.brand{display:flex;gap:12px;align-items:center;min-width:0}
-.logo{width:46px;height:46px;border-radius:15px;background:linear-gradient(145deg,#6b5cff,#4536ce);color:#fff;display:grid;place-items:center;font-size:20px;font-weight:850;flex-shrink:0;box-shadow:0 7px 16px #5547e83b}
-.brand h1{margin:0;font-size:18px;letter-spacing:-.45px;font-weight:800}.brand small{color:var(--muted);font-size:12px;display:block;margin-top:3px}
-.badge{font-size:11px;background:#e8f8f1;color:#08794d;padding:8px 12px;border-radius:99px;font-weight:800;white-space:nowrap;border:1px solid #c9efdf}.badge.off{background:#fff0f1;color:#ad2736;border-color:#ffd8dc}
-.container{max-width:1160px;margin:26px auto 40px;padding:0 22px;display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:22px;align-items:start}
-.card{background:var(--surface);border:1px solid rgba(226,231,241,.9);border-radius:22px;padding:22px;margin-bottom:18px;box-shadow:var(--shadow)}
-h2{font-size:17px;letter-spacing:-.35px;margin:0 0 15px;font-weight:800;display:flex;align-items:center;gap:9px}
-.section-sub{font-size:12px;color:var(--muted);margin:-8px 0 16px;line-height:1.55}
-label{display:block;font-size:12px;font-weight:750;margin:0 0 7px;color:#4e5a6e}
-input,select,textarea{width:100%;padding:13px 14px;border:1px solid #dce2ed;border-radius:13px;background:#fff;color:var(--text);font-size:14px;outline:none;transition:border-color .18s,box-shadow .18s}
-input:focus,select:focus,textarea:focus{border-color:var(--brand);box-shadow:0 0 0 4px #5547e817}
-input[readonly]{background:#f8f9fd;color:#536078}
-textarea{resize:vertical;min-height:72px}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field{margin-bottom:14px}
-.category{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 12px;margin:0 0 10px;scrollbar-width:thin;scrollbar-color:#d7dced transparent;-webkit-overflow-scrolling:touch}
-.category button{white-space:nowrap;border:1px solid #e3e6f0;background:#f9faff;color:#5c667a;border-radius:999px;padding:9px 15px;font-size:12px;font-weight:750;cursor:pointer;transition:all .18s;flex:0 0 auto}
-.category button:hover{border-color:#c8c2ff;color:var(--brand);background:#f4f2ff}
-.category button.active{background:linear-gradient(135deg,#6254f0,#493bd0);color:#fff;border-color:transparent;box-shadow:0 5px 13px #5547e82e}
-.menu-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-.menu-item{border:1px solid #e8ebf3;border-radius:17px;padding:15px;display:flex;gap:13px;align-items:center;min-width:0;background:linear-gradient(180deg,#fff,#fcfcff);transition:transform .18s,border-color .18s,box-shadow .18s}
-.menu-item:hover{transform:translateY(-2px);border-color:#cfcaff;box-shadow:0 9px 20px #34406510}
-.menu-info{flex:1;min-width:0}.menu-info strong{display:block;font-size:13px;line-height:1.4;overflow-wrap:anywhere;font-weight:800}.menu-info small{display:inline-flex;color:#65728a;font-size:10px;margin-top:5px;background:#f1f3f9;padding:4px 8px;border-radius:99px}
-.price{font-weight:850;color:var(--brand);font-size:14px;margin-top:8px;letter-spacing:-.2px}
-.add{border:0;background:var(--brand-soft);color:var(--brand);border-radius:12px;min-width:42px;height:42px;padding:0 12px;font-size:21px;font-weight:700;cursor:pointer;flex-shrink:0;transition:all .18s}
-.add:hover,.add:focus-visible{background:var(--brand);color:#fff;outline:none;box-shadow:0 5px 13px #5547e82b}.add:active{transform:scale(.95)}
-.cart-card{position:sticky;top:92px}.cart-heading{justify-content:space-between}.cart-count{display:inline-grid;place-items:center;min-width:25px;height:25px;padding:0 7px;border-radius:99px;background:var(--brand-soft);color:var(--brand);font-size:11px;font-weight:850;margin-left:3px}
-.cart-empty{color:#98a2b3;text-align:center;padding:27px 12px;font-size:12px;background:#fafbfe;border:1px dashed #e5e9f2;border-radius:14px}
-.cart-item{display:flex;justify-content:space-between;gap:10px;padding:13px 0;border-bottom:1px solid #edf0f5;font-size:12px}.cart-item strong{font-size:12px;line-height:1.4}.qty{display:flex;align-items:center;gap:8px;flex-shrink:0}.qty button{border:1px solid #e1e5ef;background:white;color:#4a5570;border-radius:8px;width:29px;height:29px;cursor:pointer;font-weight:800}.qty button:hover{background:var(--brand-soft);border-color:#c9c3ff;color:var(--brand)}
-.total-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;font-size:12px;color:#657087}.total-row strong{color:#29344a}.total{font-size:17px;font-weight:850;color:var(--text);border-top:1px solid var(--line);padding-top:15px;margin-top:4px}.total strong{font-size:20px;color:var(--brand);letter-spacing:-.5px}
-.primary{width:100%;border:0;background:linear-gradient(135deg,#6254f0,#493bd0);color:white;font-weight:850;padding:15px;border-radius:14px;cursor:pointer;font-size:13px;box-shadow:0 8px 17px #5547e82d;transition:transform .18s,box-shadow .18s,opacity .18s}
-.primary:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 11px 20px #5547e83a}.primary:active:not(:disabled){transform:scale(.99)}.primary:disabled{background:#cbd2df;color:#fff;box-shadow:none;cursor:not-allowed}
-.notice{font-size:11px;color:#6b7890;line-height:1.6;background:#f7f8fc;border:1px solid #edf0f6;padding:12px 13px;border-radius:12px;margin-top:12px}.notice.error{background:#fff2f3;color:#a52b39;border-color:#ffdade}.notice.success{background:#eefaf4;color:#14764e;border-color:#d3f2e1}
-.hidden{display:none!important}footer{text-align:center;color:#9aa4b5;font-size:11px;padding:12px 20px 30px}
-.qris-box{border:1px dashed #c9c4ff;background:#f8f7ff;border-radius:16px;padding:16px;text-align:center;margin:10px 0 14px}.qris-box img{max-width:230px;max-height:260px;object-fit:contain;border-radius:10px;background:white}.qris-box p{font-size:12px;color:var(--muted);margin:8px 0 0;line-height:1.5}
-.modal{position:fixed;inset:0;background:#121a2db8;backdrop-filter:blur(5px);display:flex;align-items:center;justify-content:center;padding:15px;z-index:30;overflow:auto}.modal-box{background:white;border-radius:22px;max-width:440px;width:100%;padding:25px;max-height:calc(100dvh - 30px);overflow:auto;box-shadow:0 25px 70px #10172b3d}.success{color:var(--green);font-size:34px;text-align:center;font-weight:900}
-@media(max-width:900px){.container{grid-template-columns:minmax(0,1fr) 320px;gap:15px;padding:0 16px}.card{padding:18px}.menu-grid{grid-template-columns:1fr}}
-@media(max-width:760px){.container{grid-template-columns:1fr;margin:15px auto 30px;gap:0;padding:0 13px}.container main{display:contents}.container main>.card:first-child{order:0}.container main>.card:nth-child(2){order:1}.container aside{order:2}.container main>.card:nth-child(3){order:3}.cart-card{position:static}.menu-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.header-inner{padding:11px 14px}.card{padding:17px;border-radius:19px;margin-bottom:13px}.grid2{grid-template-columns:1fr;gap:0}}
-@media(max-width:480px){.brand h1{font-size:16px}.brand small{font-size:11px}.logo{width:41px;height:41px}.badge{font-size:10px;padding:7px 9px}.menu-grid{grid-template-columns:1fr}.menu-item{padding:14px}.add{min-width:40px;height:40px}.container{padding:0 11px}.card{padding:16px}}
-@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important}}
 
-/* Modern live order tracking */
-#trackingLookupCard{order:4}#trackingCard{order:5}
-.tracking-card{border:1px solid #dfe4f0;background:linear-gradient(145deg,#fff 0%,#fafaff 100%);overflow:hidden}
-.tracking-hero{background:linear-gradient(120deg,#242b48,#4b43b8);color:#fff;border-radius:18px;padding:18px;margin:0 0 16px}
-.tracking-hero-top{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.tracking-eyebrow{font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:#c9c9ff;font-weight:800}
-.tracking-order-no{font-size:16px;font-weight:900;letter-spacing:.3px;margin-top:5px;word-break:break-all}
-.tracking-live{font-size:10px;background:#d7fae8;color:#116342;padding:7px 10px;border-radius:99px;font-weight:900;white-space:nowrap}
-.tracking-live.offline{background:#fff0d5;color:#8a5700}
-.tracking-current{padding:15px;border:1px solid #e8eaf4;background:#fff;border-radius:16px;margin-bottom:14px}
-.tracking-current small{display:block;color:#758198;font-size:11px;font-weight:700;margin-bottom:5px}
-.tracking-current strong{font-size:16px;letter-spacing:-.3px}
-.tracking-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
-.tracking-chip{font-size:10px;font-weight:800;border-radius:99px;padding:7px 10px;background:#f0efff;color:#4e43c7}
-.tracking-chip.paid{background:#e8f8ef;color:#08794d}.tracking-chip.wait{background:#fff5df;color:#946200}.tracking-chip.rejected{background:#fff0f1;color:#ae2638}
-.tracking-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:17px 0 18px}
-.tracking-step{position:relative;text-align:center;min-width:0}
-.tracking-step .dot{width:30px;height:30px;margin:0 auto 7px;border-radius:50%;display:grid;place-items:center;background:#edf0f6;color:#8993a5;font-size:12px;font-weight:900;border:2px solid #e4e8f0}
-.tracking-step.done .dot{background:#e8f8ef;color:#118457;border-color:#bcebd3}
-.tracking-step.current .dot{background:#5547e8;color:#fff;border-color:#d9d5ff;box-shadow:0 0 0 4px #5547e817}
-.tracking-step b{display:block;font-size:9px;line-height:1.35;color:#667187;overflow-wrap:anywhere}
-.tracking-step.done b,.tracking-step.current b{color:#2c3650}
-.tracking-history{border-top:1px solid #edf0f5;padding-top:14px;margin-top:12px}
-.tracking-history h3{font-size:12px;margin:0 0 10px}
-.tracking-event{display:flex;gap:10px;padding:8px 0}
-.tracking-event .event-mark{width:9px;height:9px;border-radius:50%;background:#5547e8;margin:4px 0 0;flex:0 0 auto;box-shadow:0 0 0 4px #5547e814}
-.tracking-event strong{font-size:11px;display:block}
-.tracking-event small{font-size:10px;color:#8993a5;display:block;margin-top:3px}
-.tracking-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:13px;color:#8a94a7;font-size:10px}
-.tracking-search{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.tracking-search .primary{grid-column:1/-1}
-.secondary-btn{border:1px solid #e1e5ef;background:#fff;color:#59647a;border-radius:11px;padding:10px 12px;font-size:11px;font-weight:800;cursor:pointer}
-@media(max-width:480px){.tracking-steps{gap:3px}.tracking-step b{font-size:8px}.tracking-hero{padding:15px}.tracking-order-no{font-size:14px}.tracking-search{grid-template-columns:1fr}}
+function doPost(e) {
+  try {
+    const data = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    const action = String(data.action || '');
+    let result;
 
+    switch (action) {
+      case 'saveTransaction':
+        result = saveTransactionToSheet(data.transaction);
+        break;
+      case 'getTransactions':
+        result = getTransactionsForRequestPOS_(data);
+        break;
+      case 'getProducts':
+        result = { status: 'success', products: getProductsFromSheet() };
+        break;
+      case 'saveProduct':
+        result = saveProductToSheet(data.product);
+        break;
+      case 'deleteProduct':
+        result = deleteProductFromSheet(data.productId);
+        break;
+      case 'savePosAccount':
+        result = savePosAccount_(data.account, data.userId || data.username || data.requester || '');
+        break;
+      case 'claimPosAccount':
+        result = claimPosAccountForAE_(data.accountId, data.userId || data.username || data.requester || '', data);
+        break;
+      case 'listPosAccounts':
+        result = getPosAccountsForRequestPOS_(data);
+        break;
+      case 'deletePosAccount':
+        result = deletePosAccount_(data.accountId);
+        break;
+      case 'verifyPosLogin':
+      case 'loginPosAccount':
+        result = verifyPosLogin_(data.username, data.password);
+        break;
+      case 'verifyPosSession':
+        result = verifyPosSession_(data.username);
+        break;
+      case 'saveBigOrder':
+        result = saveBigOrderForRequestPOS_(data.order, data);
+        break;
+      case 'getBigOrders':
+        result = getBigOrdersForRequestPOS_(data);
+        break;
+      case 'closeShift':
+        result = closeShift_(data.shift);
+        break;
+      case 'getAEMetrics':
+        result = getAEMetrics_(data);
+        break;
+      case 'getAEAreaAchievement':
+        result = getAEAreaAchievement_(data);
+        break;
+      case 'getAECoverage':
+        result = getAECoverageForPOS_(data.userId || data.username || data.requester);
+        break;
 
-.order-history-list{display:grid;gap:9px}
-.order-history-item{border:1px solid #e7eaf2;background:#fff;border-radius:14px;padding:12px;display:flex;align-items:center;justify-content:space-between;gap:10px}
-.order-history-info{min-width:0}.order-history-info strong{display:block;font-size:12px;overflow-wrap:anywhere}.order-history-info small{display:block;color:#8993a5;font-size:10px;margin-top:4px}
-.order-history-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}.history-track{border:0;background:#5547e8;color:#fff;border-radius:10px;padding:9px 11px;font-size:10px;font-weight:850;cursor:pointer}.history-remove{border:1px solid #e5e8ef;background:#fff;color:#8a94a7;border-radius:10px;padding:8px;font-size:10px;cursor:pointer}
-.manual-track{margin-top:14px;border-top:1px solid #edf0f5;padding-top:12px}.manual-track summary{cursor:pointer;color:#6e7890;font-size:11px;font-weight:800}
-@media(max-width:480px){.order-history-item{align-items:flex-start}.order-history-actions{flex-direction:column}.history-track{width:100%}}
-
-</style>
-</head>
-<body>
-<header><div class="header-inner">
-  <div class="brand"><div class="logo">AE</div><div><h1>Online Order</h1><small>Pesan makanan dengan mudah</small></div></div>
-  <div class="badge" id="outletStatus">Memuat outlet…</div>
-</div></header>
-<div class="container">
-<main>
-  <div class="card">
-    <h2>📍 Outlet Pemesanan</h2>
-    <div class="field"><label>Outlet tujuan</label><input id="outlet" readonly placeholder="Outlet otomatis dari QR Code"></div>
-    <div class="notice hidden" id="outletNotice" aria-live="polite"></div>
-  </div>
-  <div class="card">
-    <h2>🍽️ Pilih Menu</h2><p class="section-sub">Pilih kategori, lalu tekan Tambah untuk memasukkan menu ke keranjang.</p>
-    <div class="category" id="categories"></div>
-    <div class="menu-grid" id="menus"><div class="notice">Menghubungkan ke menu POS…</div></div>
-  </div>
-  <div class="card">
-    <h2>👤 Data Pemesan</h2>
-    <div class="grid2">
-      <div class="field"><label for="customer">Nama pelanggan *</label><input id="customer" autocomplete="name" placeholder="Nama Anda"></div>
-      <div class="field"><label for="phone">Nomor WhatsApp *</label><input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="08xxxxxxxxxx"></div>
-    </div>
-    <div class="field"><label for="orderType">Jenis pesanan *</label><select id="orderType" onchange="toggleAddress()"><option value="">Memuat pilihan…</option></select></div>
-    <div class="field hidden" id="addressField"><label for="address">Alamat pengantaran *</label><textarea id="address" rows="3" placeholder="Alamat lengkap dan patokan"></textarea></div>
-    <div class="field"><label for="notes">Catatan pesanan</label><textarea id="notes" rows="2" placeholder="Contoh: sambal dipisah, tidak pakai es…"></textarea></div>
-    <div class="field"><label for="payment">Metode pembayaran *</label><select id="payment" onchange="toggleQrisProof()"><option value="">Memuat pilihan…</option></select></div>
-    <div class="hidden" id="qrisPaymentArea">
-      <div class="qris-box">
-        <img id="qrisImage" class="hidden" alt="QRIS pembayaran outlet">
-        <p id="qrisInstruction">Scan QRIS outlet untuk melakukan pembayaran sebelum mengunggah bukti.</p>
-      </div>
-      <div class="field" id="qrisProofField"><label for="qrisProof">Bukti pembayaran QRIS * (wajib)</label><input id="qrisProof" type="file" accept="image/jpeg,image/png,image/webp" onchange="validateQrisProof()"><small id="qrisProofHint" style="display:block;color:var(--muted);margin-top:5px">JPG, PNG, atau WEBP. Maksimum 5 MB.</small></div>
-    </div>
-  </div>
-  <section class="card" id="trackingLookupCard">
-    <h2>🔎 Lacak Pesanan</h2>
-    <p class="section-sub">Masukkan nomor pesanan dan WhatsApp yang digunakan saat checkout untuk melihat perkembangan pesanan dari POS.</p>
-    <p class="section-sub">Pesanan yang dibuat dari perangkat dan browser ini akan muncul otomatis di riwayat. Pilih salah satu untuk melihat status terbaru.</p>
-    <div id="orderHistoryList" class="order-history-list"><div class="cart-empty">Belum ada riwayat pesanan di perangkat ini.</div></div>
-    <details class="manual-track">
-      <summary>Lacak dengan nomor pesanan (opsional)</summary>
-      <div class="tracking-search" style="margin-top:12px">
-        <div class="field"><label for="lookupOrderId">Nomor pesanan</label><input id="lookupOrderId" placeholder="ON-20261118-..." autocomplete="off"></div>
-        <div class="field"><label for="lookupPhone">Nomor WhatsApp</label><input id="lookupPhone" type="tel" inputmode="tel" placeholder="08xxxxxxxxxx" autocomplete="tel"></div>
-        <button type="button" class="primary" id="lookupTrackingBtn" onclick="lookupOrderTracking()">Lacak Pesanan</button>
-      </div>
-    </details>
-    <div class="notice hidden" id="lookupNotice" aria-live="polite"></div>
-  </section>
-  <section class="card tracking-card hidden" id="trackingCard" aria-live="polite">
-    <div class="tracking-hero">
-      <div class="tracking-hero-top">
-        <div><div class="tracking-eyebrow">AE POS • LIVE ORDER</div><div class="tracking-order-no" id="trackingOrderId">-</div></div>
-        <span class="tracking-live" id="trackingConnection">● LIVE</span>
-      </div>
-    </div>
-    <div class="tracking-current">
-      <small>STATUS PESANAN TERKINI</small>
-      <strong id="trackingStatus">Menunggu pembaruan status…</strong>
-      <div class="tracking-chips"><span class="tracking-chip" id="trackingPayment">Pembayaran -</span><span class="tracking-chip" id="trackingType">Jenis pesanan -</span></div>
-    </div>
-    <div class="tracking-steps" id="trackingSteps"></div>
-    <div class="tracking-history"><h3>Riwayat dari kasir POS</h3><div id="trackingEvents"><div class="tracking-event"><span class="event-mark"></span><div><strong>Pesanan dikirim ke outlet</strong><small>Menunggu data dari POS…</small></div></div></div></div>
-    <div class="tracking-footer"><span id="trackingUpdated">Memeriksa status…</span><button type="button" class="secondary-btn" onclick="stopOrderTracking()">Tutup pelacakan</button></div>
-  </section>
-</main>
-<aside>
-  <div class="card cart-card">
-    <h2 class="cart-heading"><span>🛒 Keranjang</span><span class="cart-count" id="cartCount">0</span></h2>
-    <div id="cart" aria-live="polite"><div class="cart-empty">Keranjang masih kosong.<br>Tambahkan menu pilihan Anda.</div></div>
-    <div class="total-row"><span>Subtotal</span><strong id="subtotal">Rp 0</strong></div>
-    <div class="total-row hidden" id="deliveryFeeRow"><span>Biaya delivery</span><strong id="deliveryFee">Rp 0</strong></div>
-    <div class="total-row total"><span>Total</span><strong id="total">Rp 0</strong></div>
-    <button class="primary" id="submit" onclick="submitOrder()" disabled>Pesan Sekarang</button>
-    <div class="notice" id="cartNotice">Pesanan akan dikirim ke backend POS setelah Anda melakukan konfirmasi.</div>
-  </div>
-</aside>
-</div>
-<footer>Online Order • AE POS</footer>
-<div id="modal" class="modal hidden" role="dialog" aria-modal="true"><div class="modal-box"><div class="success">✓</div><h2 style="text-align:center">Pesanan Berhasil Diterima</h2><div id="result"></div><button class="primary" onclick="closeModal()" style="margin-top:15px">Selesai</button></div></div>
-<script>
-'use strict';
-let products=[],category='Semua',cart={},orderConfig={pickup:false,dinein:false,delivery:false,cash:false,qris:false,transfer:false,deliveryFee:0},qrisImageUrl='';
-const params=new URLSearchParams(location.search);
-const outletParam=(params.get('outlet')||'').trim();
-const apiBase=(params.get('api')||'').trim();
-let isReady=false,isSubmitting=false;
-const rupiah=n=>'Rp '+Number(n||0).toLocaleString('id-ID');
-const $=id=>document.getElementById(id);
-function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function setNotice(message,type){$('outletNotice').textContent=message;$('outletNotice').className='notice'+(type?' '+type:'');if(type==='error')$('outletNotice').classList.remove('hidden');}
-function buildApiUrl(action){if(!apiBase)throw new Error('URL Web App GAS POS belum dipasang pada QR.');const url=new URL(apiBase,location.href);url.searchParams.set('action',action);if(outletParam)url.searchParams.set('outlet',outletParam);return url.toString();}
-async function apiGet(action){const response=await fetch(buildApiUrl(action),{method:'GET',cache:'no-store'});if(!response.ok)throw new Error('API POS merespons HTTP '+response.status);const data=await response.json();if(data.status==='error'||data.ok===false)throw new Error(data.message||'Permintaan ke backend gagal.');return data;}
-function initOrderConfig(){const types=[['PICKUP','Ambil di outlet (Pickup)','pickup'],['DINEIN','Makan di tempat (Dine In)','dinein'],['DELIVERY','Diantar (Delivery)','delivery']];$('orderType').innerHTML='<option value="">Pilih jenis pesanan</option>'+types.filter(x=>orderConfig[x[2]]).map(x=>`<option value="${x[0]}">${x[1]}</option>`).join('');const payments=[['CASH','Cash','cash'],['QRIS','QRIS','qris'],['TRANSFER','Transfer','transfer']];$('payment').innerHTML='<option value="">Pilih metode pembayaran</option>'+payments.filter(x=>orderConfig[x[2]]).map(x=>`<option value="${x[0]}">${x[1]}</option>`).join('');if(!$('orderType').options.length||$('orderType').options.length===1)$('orderType').innerHTML='<option value="">Tidak ada jenis pesanan aktif</option>';if(!$('payment').options.length||$('payment').options.length===1)$('payment').innerHTML='<option value="">Tidak ada metode pembayaran aktif</option>';}
-function qrisImageCandidates(raw){
-  const value=String(raw||'').trim();if(!value)return [];
-  try{
-    const u=new URL(value,location.href),host=u.hostname.toLowerCase();
-    if(host==='drive.google.com'||host.endsWith('.drive.google.com')){
-      let id=u.searchParams.get('id')||'';
-      if(!id){const m=u.pathname.match(/\/file\/d\/([^/]+)/);if(m)id=m[1];}
-      if(id)return [
-        'https://drive.google.com/thumbnail?id='+encodeURIComponent(id)+'&sz=w1200',
-        'https://drive.google.com/uc?export=view&id='+encodeURIComponent(id),
-        'https://lh3.googleusercontent.com/d/'+encodeURIComponent(id)
-      ];
+      // ONLINE ORDER - integrated into this existing POS Web App
+      case 'submitOnlineOrder':
+      case 'submitOrder':
+        result = submitOnlineOrder_(data);
+        break;
+      case 'getOnlineOrderConfigForPOS':
+        result = getOnlineOrderConfigForPOS_(data);
+        break;
+      case 'saveOnlineOrderConfig':
+        result = saveOnlineOrderConfig_(data);
+        break;
+      case 'getOnlineOrderInbox':
+        result = getOnlineOrderInbox_(data);
+        break;
+      case 'updateOnlineOrderStatus':
+        result = updateOnlineOrderStatus_(data);
+        break;
+      case 'updateOnlineOrderPayment':
+        result = updateOnlineOrderPayment_(data);
+        break;
+      default:
+        result = { status: 'error', message: 'Aksi tidak dikenali: ' + action };
     }
-  }catch(e){}
-  return [value];
+    return jsonOut_(result);
+  } catch (err) {
+    return jsonOut_({
+      status: 'error',
+      message: String(err && err.message || err)
+    });
+  }
 }
-function showQrisImage(raw){
-  const img=$('qrisImage'),candidates=qrisImageCandidates(raw);img.classList.add('hidden');img.onerror=null;
-  if(!candidates.length){$('qrisInstruction').textContent='QRIS belum diatur oleh outlet. Silakan hubungi outlet.';return;}
-  let index=0;
-  img.onload=()=>{img.classList.remove('hidden');$('qrisInstruction').textContent='Scan QRIS berikut, selesaikan pembayaran, lalu unggah bukti pembayaran.';};
-  img.onerror=()=>{index++;if(index<candidates.length){img.src=candidates[index];}else{$('qrisInstruction').textContent='Gambar QRIS gagal dimuat. Outlet perlu memeriksa akses berbagi file QRIS di Google Drive.';img.classList.add('hidden');}};
-  img.src=candidates[index];
+
+function doGet(e) {
+  try {
+    const params = (e && e.parameter) || {};
+    const action = String(params.action || '');
+
+    if (action === 'getProducts') {
+      return jsonOut_({ status: 'success', products: getProductsFromSheet() });
+    }
+    if (action === 'getTransactions') {
+      return jsonOut_(getTransactionsForRequestPOS_({
+        date: params.date || '',
+        resto: params.resto || '',
+        brand: params.brand || '',
+        salesSource: params.salesSource || '',
+        userId: params.userId || params.username || '',
+        username: params.username || params.userId || '',
+        role: params.role || '',
+        userRole: params.role || ''
+      }));
+    }
+    if (action === 'getBigOrders') {
+      return jsonOut_(getBigOrdersForRequestPOS_(params));
+    }
+    if (action === 'getAECoverage') {
+      return jsonOut_(getAECoverageForPOS_(params.userId || params.username || params.requester));
+    }
+
+    // ONLINE ORDER - public read-only endpoints, using POS Products and POS_Accounts
+    if (action === 'getOnlineOrderProducts') {
+      return jsonOut_(getOnlineOrderProducts_(params.outlet || ''));
+    }
+    if (action === 'getOnlineOrderConfig') {
+      return jsonOut_(getOnlineOrderConfig_(params.outlet || ''));
+    }
+    if (action === 'getOnlineOrderStatus') {
+      return jsonOut_(getOnlineOrderPublicStatus_(params.orderId || ''));
+    }
+    if (action === 'onlineOrderHealth') {
+      return jsonOut_({ ok: true, status: 'success', service: 'AE POS Online Order', timestamp: new Date().toISOString() });
+    }
+    return jsonOut_({
+      status: 'success',
+      message: 'KasirKu POS API Connected Successfully!',
+      availableActions: [
+        'getProducts', 'getTransactions', 'getBigOrders',
+        'saveTransaction', 'saveProduct', 'savePosAccount',
+        'listPosAccounts', 'verifyPosLogin', 'getAEMetrics', 'getAECoverage',
+        'getOnlineOrderProducts', 'getOnlineOrderConfig', 'submitOnlineOrder',
+        'getOnlineOrderConfigForPOS', 'saveOnlineOrderConfig', 'getOnlineOrderInbox',
+        'updateOnlineOrderStatus', 'updateOnlineOrderPayment'
+      ]
+    });
+  } catch (err) {
+    return jsonOut_({ status: 'error', message: String(err && err.message || err) });
+  }
 }
-async function loadConfig(){const data=await apiGet('getOnlineOrderConfig');orderConfig=data.config||{};qrisImageUrl=data.qrisImageUrl||'';$('outlet').value=data.outletName||outletParam;$('outletStatus').textContent='● Outlet Online';$('outletStatus').className='badge';$('outletNotice').classList.add('hidden');initOrderConfig();if(qrisImageUrl){showQrisImage(qrisImageUrl);}else{$('qrisInstruction').textContent='QRIS belum diatur oleh outlet. Metode QRIS tidak akan ditampilkan.';}}
-async function loadMenus(){const data=await apiGet('getOnlineOrderProducts');products=(data.products||[]).filter(p=>p.active!==false).map((p,i)=>({id:String(p.id??p.productId??i+1),name:String(p.name??p.nama??''),category:String(p.category??p.kategori??'Menu'),price:Number(p.price??p.harga??0),icon:p.icon||'🍽️'})).filter(p=>p.name&&Number.isFinite(p.price));category='Semua';renderCategories();renderMenus();renderCart();if(!products.length)$('menus').innerHTML='<div class="notice">Belum ada menu untuk brand outlet ini pada sheet Products POS.</div>';}
-function renderCategories(){const cats=['Semua',...new Set(products.map(p=>p.category))];$('categories').innerHTML=cats.map(c=>`<button type="button" class="${c===category?'active':''}" data-category="${escapeHtml(c)}" aria-pressed="${c===category?'true':'false'}">${escapeHtml(c)}</button>`).join('');}
-function selectCategory(c){category=String(c);renderCategories();renderMenus();}
-function renderMenus(){const rows=products.filter(p=>category==='Semua'||p.category===category);$('menus').innerHTML=rows.map(p=>`<article class="menu-item"><div class="menu-info"><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.category)}</small><div class="price">${rupiah(p.price)}</div></div><button type="button" class="add" aria-label="Tambah ${escapeHtml(p.name)} ke keranjang" data-add-product="${escapeHtml(p.id)}" title="Tambah ke keranjang">+</button></article>`).join('');if(!rows.length)$('menus').innerHTML='<div class="notice">Belum ada menu pada kategori ini.</div>';}
-function addItem(id){const key=String(id);if(!products.some(p=>p.id===key))return;cart[key]=(cart[key]||0)+1;renderCart();showAddedFeedback();}
-function changeQty(id,delta){const key=String(id);cart[key]=(cart[key]||0)+Number(delta);if(cart[key]<=0)delete cart[key];renderCart();}
-function getSubtotal(){return Object.keys(cart).reduce((sum,id)=>{const p=products.find(x=>x.id===id);return sum+(p?p.price*cart[id]:0);},0);}
-function renderCart(){const ids=Object.keys(cart);const subtotal=getSubtotal();const fee=$('orderType').value==='DELIVERY'?Number(orderConfig.deliveryFee||0):0;$('cart').innerHTML=ids.length?ids.map(id=>{const p=products.find(x=>x.id===id);if(!p)return '';return `<div class="cart-item"><div><strong>${escapeHtml(p.name)}</strong><div style="color:var(--muted);margin-top:4px">${rupiah(p.price)} × ${cart[id]}</div></div><div class="qty"><button type="button" aria-label="Kurangi ${escapeHtml(p.name)}" data-cart-id="${escapeHtml(id)}" data-cart-delta="-1">−</button><b>${cart[id]}</b><button type="button" aria-label="Tambah ${escapeHtml(p.name)}" data-cart-id="${escapeHtml(id)}" data-cart-delta="1">+</button></div></div>`;}).join(''):'<div class="cart-empty">Keranjang masih kosong.<br>Tambahkan menu pilihan Anda.</div>';$('cartCount').textContent=ids.reduce((sum,id)=>sum+cart[id],0);$('subtotal').textContent=rupiah(subtotal);$('deliveryFee').textContent=rupiah(fee);$('deliveryFeeRow').classList.toggle('hidden',!fee);$('total').textContent=rupiah(subtotal+fee);$('submit').disabled=!isReady||!ids.length||isSubmitting;}
-let addedFeedbackTimer=null;
-function showAddedFeedback(){const notice=$('cartNotice');notice.textContent='Menu berhasil ditambahkan ke keranjang.';notice.className='notice success';clearTimeout(addedFeedbackTimer);addedFeedbackTimer=setTimeout(()=>{notice.textContent='Pesanan akan dikirim ke backend POS setelah Anda melakukan konfirmasi.';notice.className='notice';},2200);}
-function bindDynamicControls(){
-  $('categories').addEventListener('click',event=>{const button=event.target.closest('button[data-category]');if(button&&$('categories').contains(button))selectCategory(button.dataset.category);});
-  $('menus').addEventListener('click',event=>{const button=event.target.closest('button[data-add-product]');if(button&&$('menus').contains(button))addItem(button.dataset.addProduct);});
-  $('cart').addEventListener('click',event=>{const button=event.target.closest('button[data-cart-id][data-cart-delta]');if(button&&$('cart').contains(button))changeQty(button.dataset.cartId,Number(button.dataset.cartDelta));});
+
+/**
+ * Mendapatkan/membuat sheet dan memastikan header baru ditambahkan tanpa
+ * menghapus kolom atau data lama.
+ */
+function sheet_(name, headers) {
+  let sh = SS.getSheetByName(name);
+  if (!sh) sh = SS.insertSheet(name);
+
+  if (sh.getLastRow() === 0) {
+    sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+  } else if (headers && sh.getLastColumn() < headers.length) {
+    const currentLastColumn = sh.getLastColumn();
+    sh.getRange(1, currentLastColumn + 1, 1, headers.length - currentLastColumn)
+      .setValues([headers.slice(currentLastColumn)]);
+  }
+  return sh;
 }
-function toggleAddress(){$('addressField').classList.toggle('hidden',$('orderType').value!=='DELIVERY');renderCart();}
-function toggleQrisProof(){const q=$('payment').value==='QRIS';$('qrisPaymentArea').classList.toggle('hidden',!q);if(!q)$('qrisProof').value='';}
-function validateQrisProof(){const file=$('qrisProof').files[0],hint=$('qrisProofHint');if(file&&file.size>5*1024*1024){hint.textContent='File terlalu besar. Maksimum 5 MB.';hint.style.color='#dc2626';$('qrisProof').value='';return false;}if(file&&!['image/jpeg','image/png','image/webp'].includes(file.type)){hint.textContent='Format file harus JPG, PNG, atau WEBP.';hint.style.color='#dc2626';$('qrisProof').value='';return false;}hint.textContent=file?'File dipilih: '+file.name:'JPG, PNG, atau WEBP. Maksimum 5 MB.';hint.style.color=file?'#16a34a':'var(--muted)';return !!file;}
-function fileAsDataUrl(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error('Gagal membaca file bukti pembayaran.'));reader.readAsDataURL(file);});}
-const ORDER_HISTORY_KEY='ae_pos_online_order_history_v1';
-function readOrderHistory(){try{const all=JSON.parse(localStorage.getItem(ORDER_HISTORY_KEY)||'{}');return Array.isArray(all[outletParam])?all[outletParam]:[];}catch(e){return [];}}
-function writeOrderHistory(items){try{const all=JSON.parse(localStorage.getItem(ORDER_HISTORY_KEY)||'{}');all[outletParam]=items.slice(0,20);localStorage.setItem(ORDER_HISTORY_KEY,JSON.stringify(all));}catch(e){$('lookupNotice').textContent='Riwayat tidak dapat disimpan pada browser ini. Aktifkan penyimpanan situs agar riwayat tersedia.';$('lookupNotice').className='notice error';}}
-function saveOrderToHistory(orderId,phone){const items=readOrderHistory().filter(x=>x.orderId!==String(orderId));items.unshift({orderId:String(orderId),phone:String(phone).replace(/[^\d+]/g,''),createdAt:new Date().toISOString()});writeOrderHistory(items);renderOrderHistory();}
-function renderOrderHistory(){const items=readOrderHistory();const box=$('orderHistoryList');if(!box)return;if(!items.length){box.innerHTML='<div class="cart-empty">Belum ada riwayat pesanan di perangkat ini. Pesanan baru akan otomatis tersimpan di sini.</div>';return;}box.innerHTML=items.map((item,i)=>`<div class="order-history-item"><div class="order-history-info"><strong>${escapeHtml(item.orderId)}</strong><small>${escapeHtml(fmtTrackingTime(item.createdAt))} • Nomor WhatsApp tersimpan di perangkat</small></div><div class="order-history-actions"><button class="history-track" type="button" data-history-track="${i}">Lihat status</button><button class="history-remove" type="button" title="Hapus dari riwayat" data-history-remove="${i}">×</button></div></div>`).join('');}
-function openHistoryOrder(index){const item=readOrderHistory()[Number(index)];if(!item)return;startOrderTracking(item.orderId,item.phone);$('trackingCard').scrollIntoView({behavior:'smooth',block:'center'});}
-function removeHistoryOrder(index){const items=readOrderHistory();items.splice(Number(index),1);writeOrderHistory(items);renderOrderHistory();}
-async function submitOrder(){if(isSubmitting)return;const customer=$('customer').value.trim(),phone=$('phone').value.trim(),orderType=$('orderType').value,payment=$('payment').value,address=$('address').value.trim(),notes=$('notes').value.trim();const ids=Object.keys(cart);if(!isReady||!outletParam||!apiBase){alert('Form belum terhubung ke backend POS.');return;}if(!customer||!phone||!orderType||!payment||!ids.length){alert('Mohon lengkapi nama, WhatsApp, jenis pesanan, pembayaran, dan keranjang.');return;}if(!/^\+?[0-9\s-]{8,18}$/.test(phone)){alert('Nomor WhatsApp tidak valid.');return;}if(orderType==='DELIVERY'&&!address){alert('Alamat delivery wajib diisi.');return;}if(payment==='QRIS'&&!validateQrisProof()){alert('Bukti pembayaran QRIS wajib diunggah.');return;}if(payment==='QRIS'&&!qrisImageUrl){alert('QRIS outlet belum dikonfigurasi. Silakan pilih pembayaran lain atau hubungi outlet.');return;}
-  isSubmitting=true;$('submit').disabled=true;$('submit').textContent='Mengirim pesanan…';
-  try{let proof=null;if(payment==='QRIS'){const f=$('qrisProof').files[0];proof={data:await fileAsDataUrl(f),mimeType:f.type,name:f.name};}const payload={action:'submitOnlineOrder',outlet:outletParam,customer:customer,phone:phone,orderType:orderType,payment:payment,address:address,notes:notes,items:ids.map(id=>({productId:id,qty:cart[id]})),proof:proof};
-    // text/plain menghindari preflight OPTIONS saat form publik memanggil Apps Script.
-    const response=await fetch(apiBase,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)});if(!response.ok)throw new Error('Backend merespons HTTP '+response.status);const data=await response.json();if(data.status!=='success'&&data.ok!==true)throw new Error(data.message||'Pesanan gagal disimpan.');
-    const statusLabel=payment==='QRIS'?'Menunggu verifikasi pembayaran':payment==='TRANSFER'?'Menunggu pembayaran':'Menunggu diproses';$('result').innerHTML=`<div style="background:#f8fafc;border-radius:12px;padding:14px;font-size:13px;line-height:1.8"><b>Order ID:</b> ${escapeHtml(data.orderId)}<br><b>Outlet:</b> ${escapeHtml($('outlet').value)}<br><b>Nama:</b> ${escapeHtml(customer)}<br><b>WhatsApp:</b> ${escapeHtml(phone)}<br><b>Jenis pesanan:</b> ${escapeHtml(orderType)}<br><b>Subtotal:</b> ${rupiah(data.subtotal)}<br><b>Biaya delivery:</b> ${rupiah(data.deliveryFee)}<br><b>Total:</b> <strong>${rupiah(data.total)}</strong><br><b>Pembayaran:</b> ${escapeHtml(payment)}<br><b>Status:</b> ${escapeHtml(statusLabel)}</div><p style="font-size:12px;color:#64748b">Pesanan sudah tersimpan pada sistem Online Order AE POS.</p>`;$('modal').classList.remove('hidden');saveOrderToHistory(data.orderId,phone);startOrderTracking(data.orderId,phone);cart={};renderCart();$('customer').value='';$('phone').value='';$('address').value='';$('notes').value='';$('orderType').value='';$('payment').value='';$('qrisProof').value='';$('qrisPaymentArea').classList.add('hidden');$('addressField').classList.add('hidden');
-  }catch(err){console.error(err);alert('Pesanan gagal dikirim: '+err.message);}finally{isSubmitting=false;$('submit').textContent='Pesan Sekarang';renderCart();}}
-const ORDER_STATUS_LABELS={NEW:'Pesanan diterima outlet',ACCEPTED:'Pesanan dikonfirmasi outlet',PREPARING:'Pesanan sedang disiapkan',READY:'Pesanan siap diambil / diantar',COMPLETED:'Pesanan selesai',REJECTED:'Pesanan ditolak outlet',CANCELLED:'Pesanan dibatalkan'};
-const PAYMENT_STATUS_LABELS={WAITING_VERIFICATION:'Menunggu verifikasi QRIS',WAITING_PAYMENT:'Menunggu pembayaran',UNPAID:'Belum dibayar',PAID:'Pembayaran berhasil',REJECTED:'Pembayaran ditolak'};
-const ORDER_STEPS=[['NEW','Diterima'],['ACCEPTED','Dikonfirmasi'],['PREPARING','Disiapkan'],['READY','Siap'],['COMPLETED','Selesai']];
-let trackingTimer=null,trackedOrder=null,trackingInFlight=false;
-function fmtTrackingTime(value){if(!value)return 'Waktu belum tersedia';const d=new Date(value);return isNaN(d)?String(value):d.toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});}
-function paymentChipClass(status){status=String(status||'').toUpperCase();return status==='PAID'?'tracking-chip paid':(['REJECTED'].includes(status)?'tracking-chip rejected':'tracking-chip wait');}
-function renderTracking(data){
-  $('trackingCard').classList.remove('hidden');
-  $('trackingOrderId').textContent=data.orderId||trackedOrder.orderId;
-  $('trackingPayment').textContent='Bayar: '+(PAYMENT_STATUS_LABELS[data.paymentStatus]||data.paymentStatus||'-');
-  $('trackingPayment').className=paymentChipClass(data.paymentStatus);
-  $('trackingType').textContent='Pesanan: '+({PICKUP:'Pickup',DINEIN:'Dine In',DELIVERY:'Delivery'}[data.orderType]||data.orderType||'-');
-  const status=String(data.orderStatus||'NEW').toUpperCase();
-  $('trackingStatus').textContent=ORDER_STATUS_LABELS[status]||status;
-  const rejected=['REJECTED','CANCELLED'].includes(status);
-  const completed=status==='COMPLETED';
-  $('trackingSteps').innerHTML=ORDER_STEPS.map((step,i)=>{
-    const currentIndex=ORDER_STEPS.findIndex(x=>x[0]===status);
-    const done=currentIndex>=0&&i<currentIndex;
-    const current=step[0]===status;
-    const terminalBad=rejected&&i===Math.max(0,currentIndex);
-    return `<div class="tracking-step ${done?'done':''} ${current?'current':''}"><div class="dot">${terminalBad?'!':done?'✓':i+1}</div><b>${terminalBad?(status==='REJECTED'?'Ditolak':'Batal'):step[1]}</b></div>`;
+
+function normalizeItems_(items) {
+  if (!Array.isArray(items)) return [];
+  return items.map(function(item) {
+    item = item || {};
+    return {
+      id: item.id == null ? '' : String(item.id),
+      name: String(item.name || item.nama || 'Produk'),
+      qty: Math.max(0, Number(item.qty || item.quantity || 0)),
+      price: Math.max(0, Number(item.price || item.harga || 0)),
+      subtotal: Number(item.subtotal != null ? item.subtotal :
+        (Number(item.price || item.harga || 0) * Number(item.qty || item.quantity || 0))) || 0,
+      category: String(item.category || ''),
+      sku: String(item.sku || '')
+    };
+  }).filter(function(item) {
+    return item.name && item.qty > 0;
+  });
+}
+
+function saveTransactionToSheet(tx) {
+  if (!tx || !tx.id) throw new Error('Data transaksi tidak lengkap.');
+  const posUsername = String(tx.posUsername || tx.username || tx.accountUsername || '');
+  // Tentukan AE penerima sebelum lock penulisan agar tidak menahan lock saat koneksi ADM dipanggil.
+  const aePayoutOwner = resolveAEPayoutOwnerPOS_(tx.resto || '', posUsername, tx.salesSource || 'Reguler');
+  const sh = sheet_('Transactions', TRANSACTION_HEADERS);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+
+  try {
+    const lastRow = sh.getLastRow();
+    if (lastRow > 1) {
+      const existing = sh.getRange(2, 1, lastRow - 1, 1)
+        .createTextFinder(String(tx.id))
+        .matchEntireCell(true)
+        .findNext();
+      if (existing) {
+        return {
+          status: 'success',
+          message: 'Transaksi sudah tersimpan sebelumnya.',
+          duplicate: true,
+          id: String(tx.id)
+        };
+      }
+    }
+
+    const items = normalizeItems_(tx.items);
+    const itemDetail = items.length
+      ? items.map(function(item) { return item.name + ' (x' + item.qty + ')'; }).join(', ')
+      : (typeof tx.items === 'string' ? tx.items : '');
+
+    const dateValue = tx.date || new Date();
+    const dateISO = String(tx.dateISO || tx.date || '');
+    const row = [
+      String(tx.id),
+      dateValue,
+      String(tx.cashier || ''),
+      String(tx.paymentMethod || ''),
+      itemDetail,
+      Number(tx.subtotal) || 0,
+      Number(tx.discount) || 0,
+      Number(tx.total) || 0,
+      Number(tx.cashGiven) || 0,
+      Number(tx.change) || 0,
+      String(tx.resto || ''),
+      String(tx.brand || ''),
+      String(tx.salesSource || 'Reguler'),
+      String(tx.shiftId || ''),
+      String(tx.shiftStatus || 'OPEN'),
+      dateISO,
+      JSON.stringify(items),
+      posUsername,
+      aePayoutOwner
+    ];
+
+    sh.appendRow(row);
+    return {
+      status: 'success',
+      message: 'Transaksi tersimpan.',
+      id: String(tx.id),
+      transaction: {
+        id: String(tx.id),
+        date: dateISO || String(dateValue),
+        dateISO: dateISO,
+        cashier: String(tx.cashier || ''),
+        paymentMethod: String(tx.paymentMethod || ''),
+        items: items,
+        subtotal: Number(tx.subtotal) || 0,
+        discount: Number(tx.discount) || 0,
+        total: Number(tx.total) || 0,
+        cashGiven: Number(tx.cashGiven) || 0,
+        change: Number(tx.change) || 0,
+        resto: String(tx.resto || ''),
+        brand: String(tx.brand || ''),
+        salesSource: String(tx.salesSource || 'Reguler'),
+        shiftId: String(tx.shiftId || ''),
+        shiftStatus: String(tx.shiftStatus || 'OPEN'),
+        posUsername: posUsername,
+        aePayoutOwner: aePayoutOwner
+      }
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function getProductsFromSheet() {
+  const sh = sheet_('Products', ['ID', 'Nama Produk', 'Kategori', 'Harga', 'Icon', 'Brand', 'SKU']);
+  const rows = sh.getDataRange().getValues();
+  const out = [];
+
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0] !== '') {
+      out.push({
+        id: rows[i][0] == null ? '' : String(rows[i][0]),
+        name: String(rows[i][1] || ''),
+        category: String(rows[i][2] || ''),
+        kategori: String(rows[i][2] || ''),
+        price: Number(rows[i][3]) || 0,
+        icon: String(rows[i][4] || 'package'),
+        brand: String(rows[i][5] || ''),
+        sku: String(rows[i][6] || '')
+      });
+    }
+  }
+  return out;
+}
+
+function saveProductToSheet(product) {
+  if (!product || !String(product.name || '').trim()) {
+    throw new Error('Nama produk wajib diisi.');
+  }
+
+  const sh = sheet_('Products', ['ID', 'Nama Produk', 'Kategori', 'Harga', 'Icon', 'Brand', 'SKU']);
+  const id = String(product.id || Date.now());
+  const rows = sh.getDataRange().getValues();
+  let rowNumber = -1;
+
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) === id) {
+      rowNumber = i + 1;
+      break;
+    }
+  }
+
+  const values = [
+    id,
+    String(product.name).trim(),
+    String(product.category || product.kategori || 'Makanan'),
+    Number(product.price) || 0,
+    String(product.icon || 'package'),
+    String(product.brand || ''),
+    String(product.sku || '')
+  ];
+
+  if (rowNumber > 0) sh.getRange(rowNumber, 1, 1, values.length).setValues([values]);
+  else sh.appendRow(values);
+
+  const savedProduct = {
+    id: id,
+    name: String(product.name).trim(),
+    category: String(product.category || product.kategori || 'Makanan'),
+    kategori: String(product.category || product.kategori || 'Makanan'),
+    price: Number(product.price) || 0,
+    icon: String(product.icon || 'package'),
+    brand: String(product.brand || '').toUpperCase(),
+    sku: String(product.sku || '')
+  };
+  return { status: 'success', message: 'Produk tersimpan.', product: savedProduct };
+}
+
+function deleteProductFromSheet(productId) {
+  const sh = SS.getSheetByName('Products');
+  if (!sh) return { status: 'error', message: 'Sheet Products tidak ditemukan.' };
+
+  const rows = sh.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) === String(productId)) {
+      sh.deleteRow(i + 1);
+      return { status: 'success', message: 'Produk dihapus.' };
+    }
+  }
+  return { status: 'error', message: 'Produk tidak ditemukan.' };
+}
+
+function hashPassword_(password) {
+  const bytes = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    String(password || ''),
+    Utilities.Charset.UTF_8
+  );
+  return bytes.map(function(b) {
+    return ('0' + ((b + 256) % 256).toString(16)).slice(-2);
   }).join('');
-  const statusEvents=(Array.isArray(data.statusHistory)?data.statusHistory:[]).map(ev=>({...ev,kind:'order'}));
-  const paymentEvents=(Array.isArray(data.paymentHistory)?data.paymentHistory:[]).map(ev=>({...ev,kind:'payment'}));
-  const history=statusEvents.concat(paymentEvents).sort((a,b)=>new Date(a.at||0)-new Date(b.at||0));
-  $('trackingEvents').innerHTML=history.length?history.slice().reverse().map(ev=>{
-    const label=ev.kind==='payment'?'Pembayaran: '+(PAYMENT_STATUS_LABELS[ev.status]||ev.status): (ORDER_STATUS_LABELS[ev.status]||ev.status||'Pembaruan pesanan');
-    return `<div class="tracking-event"><span class="event-mark"></span><div><strong>${escapeHtml(label)}</strong><small>${escapeHtml(fmtTrackingTime(ev.at))}${ev.by?' • '+escapeHtml(ev.by):''}</small></div></div>`;
-  }).join(''):`<div class="tracking-event"><span class="event-mark"></span><div><strong>${escapeHtml(ORDER_STATUS_LABELS[status]||status)}</strong><small>Dibuat ${escapeHtml(fmtTrackingTime(data.createdAt))}</small></div></div>`;
-  $('trackingConnection').textContent='● LIVE';$('trackingConnection').className='tracking-live';
-  $('trackingUpdated').textContent='Sinkron POS • '+new Date().toLocaleTimeString('id-ID');
-  const terminal=['COMPLETED','REJECTED','CANCELLED'].includes(status);
-  if(terminal)stopOrderTracking(false);
 }
-async function refreshOrderTracking(){
-  if(!trackedOrder||trackingInFlight)return;
-  trackingInFlight=true;
-  try{
-    const url=new URL(apiBase,location.href);url.searchParams.set('action','getOnlineOrderStatus');url.searchParams.set('orderId',trackedOrder.orderId);url.searchParams.set('phone',trackedOrder.phone);
-    const res=await fetch(url.toString(),{method:'GET',cache:'no-store'});
-    if(!res.ok)throw new Error('HTTP '+res.status+' dari Web App POS');
-    const raw=await res.text();
-    let data;
-    try{data=JSON.parse(raw);}catch(parseErr){throw new Error('Respons GAS bukan JSON. Periksa URL deployment dan akses Web App.');}
-    if(!data||data.status!=='success')throw new Error((data&&data.message)||'Backend tidak mengembalikan status success.');
-    renderTracking(data);$('lookupNotice').classList.add('hidden');
-  }catch(err){
-    const detail=String(err&&err.message||err||'Kesalahan tidak diketahui');
-    console.error('Online Order tracking error:',err);
-    $('trackingCard').classList.remove('hidden');$('trackingConnection').textContent='● GAGAL MEMUAT';$('trackingConnection').className='tracking-live offline';
-    $('trackingStatus').textContent=detail;
-    $('trackingUpdated').textContent='Akan mencoba lagi otomatis • '+new Date().toLocaleTimeString('id-ID');
-  }finally{trackingInFlight=false;}
+
+function posAccountHeaders_() {
+  // Kolom AE Pengelola ditambahkan di ujung; data akun lama tetap dipertahankan.
+  return ['ID', 'Username', 'Password', 'Brand', 'Resto', 'Aktif', 'Dibuat', 'Tipe POS', 'AE Pengelola'];
 }
-function startOrderTracking(orderId,phone){
-  trackedOrder={orderId:String(orderId),phone:String(phone).replace(/[^\d+]/g,'')};
-  try{sessionStorage.setItem('ae_online_order_tracking',JSON.stringify(trackedOrder));}catch(e){}
-  $('lookupOrderId').value=trackedOrder.orderId;$('lookupPhone').value=phone;
-  $('trackingCard').classList.remove('hidden');$('trackingStatus').textContent='Menghubungkan ke status pesanan POS…';
-  refreshOrderTracking();if(trackingTimer)clearInterval(trackingTimer);trackingTimer=setInterval(refreshOrderTracking,3000);
+
+function normalizePosType_(account) {
+  const raw = String(
+    (account && (account.type || account.posType || account.pos_type)) || ''
+  ).trim().toUpperCase();
+  if (raw !== 'SATELIT' && raw !== 'EVENT') {
+    throw new Error('Tipe POS wajib dipilih: SATELIT atau EVENT.');
+  }
+  return raw;
 }
-async function lookupOrderTracking(){
-  const id=$('lookupOrderId').value.trim(),phone=$('lookupPhone').value.trim();
-  if(!id||!phone){$('lookupNotice').textContent='Nomor pesanan dan WhatsApp wajib diisi.';$('lookupNotice').className='notice error';return;}
-  startOrderTracking(id,phone);await refreshOrderTracking();
+
+function savePosAccount_(account, actorAE) {
+  if (!account || !String(account.username || '').trim() ||
+      !String(account.brand || '').trim()) {
+    throw new Error('Username, brand, dan tipe POS wajib diisi.');
+  }
+
+  const posType = normalizePosType_(account);
+  // Header Tipe POS akan ditambahkan ke kolom H pada sheet lama tanpa menghapus data.
+  const sh = sheet_('POS_Accounts', posAccountHeaders_());
+  const rows = sh.getDataRange().getValues();
+  const username = String(account.username).trim().toLowerCase();
+
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][1]).trim().toLowerCase() === username &&
+        String(rows[i][0]) !== String(account.id || '')) {
+      throw new Error('Username POS sudah digunakan.');
+    }
+  }
+
+  const id = String(account.id || Utilities.getUuid());
+  let foundRow = -1;
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) === id) {
+      foundRow = i + 1;
+      break;
+    }
+  }
+
+  const oldPassword = foundRow > 0 ? String(sh.getRange(foundRow, 3).getValue() || '') : '';
+  const createdAt = foundRow > 0 ? sh.getRange(foundRow, 7).getValue() : new Date();
+  const managerCol = 9;
+  const oldManager = foundRow > 0 ? String(sh.getRange(foundRow, managerCol).getValue() || '').trim() : '';
+  const managerAE = String(actorAE || account.aeManager || account.aeUsername || oldManager || '').trim();
+  if (managerAE) {
+    const verifyManager = getAECoverageForPOS_(managerAE);
+    if (!verifyManager || verifyManager.status !== 'success') {
+      throw new Error('AE Pengelola tidak ditemukan atau bukan user AE: ' + managerAE);
+    }
+  }
+  const values = [
+    id,
+    String(account.username).trim(),
+    account.password ? String(account.password) : oldPassword,
+    String(account.brand).trim().toUpperCase(),
+    String(account.resto || ''),
+    account.active === false ? 'NONAKTIF' : 'AKTIF',
+    createdAt,
+    posType,
+    managerAE
+  ];
+
+  if (foundRow > 0) sh.getRange(foundRow, 1, 1, values.length).setValues([values]);
+  else sh.appendRow(values);
+
+  // Sinkronkan konfigurasi Online Order setiap kali akun POS disimpan melalui API.
+  // Fungsi sinkronisasi hanya menambahkan baris yang belum ada (default NONAKTIF),
+  // sehingga pengaturan Pickup/Delivery/QRIS/fee pada outlet lama tidak tertimpa.
+  let onlineOrderSync = { status: 'skipped', created: 0, message: 'Sinkronisasi belum dijalankan.' };
+  try {
+    onlineOrderSync = syncOnlineOrderConfigFromPOSAccounts_();
+  } catch (syncError) {
+    // Jangan membatalkan penyimpanan akun POS jika sheet konfigurasi sedang bermasalah.
+    onlineOrderSync = {
+      status: 'error',
+      created: 0,
+      message: String(syncError && syncError.message ? syncError.message : syncError)
+    };
+  }
+
+  return {
+    status: 'success',
+    message: onlineOrderSync.status === 'error'
+      ? 'Akun POS tersimpan, tetapi sinkronisasi Online Order gagal: ' + onlineOrderSync.message
+      : 'Akun POS dan tipe POS tersimpan di server. Konfigurasi Online Order disinkronkan.',
+    onlineOrderSync: onlineOrderSync,
+    account: {
+      id: id,
+      username: values[1],
+      brand: values[3],
+      resto: values[4],
+      active: values[5],
+      type: values[7],
+      posType: values[7],
+      aeManager: values[8]
+    }
+  };
 }
-function stopOrderTracking(clear=true){
-  if(trackingTimer){clearInterval(trackingTimer);trackingTimer=null;}
-  if(clear){trackedOrder=null;try{sessionStorage.removeItem('ae_online_order_tracking');}catch(e){}$('trackingCard').classList.add('hidden');}
+
+function listPosAccounts_() {
+  const sh = sheet_('POS_Accounts', posAccountHeaders_());
+  return sh.getDataRange().getValues().slice(1).filter(function(r) {
+    return r[0];
+  }).map(function(r) {
+    const posType = String(r[7] || '').trim().toUpperCase();
+    return {
+      id: String(r[0]),
+      username: String(r[1]),
+      password: String(r[2] || ''),
+      brand: String(r[3]),
+      resto: String(r[4] || ''),
+      active: String(r[5] || 'AKTIF'),
+      createdAt: r[6],
+      type: posType,
+      posType: posType,
+      aeManager: String(r[8] || '').trim()
+    };
+  });
 }
-function restoreOrderTracking(){
-  try{const saved=JSON.parse(sessionStorage.getItem('ae_online_order_tracking')||'null');if(saved&&saved.orderId&&saved.phone)startOrderTracking(saved.orderId,saved.phone);}catch(e){}
+
+function claimPosAccountForAE_(accountId, username, request) {
+  request = request || {};
+  const user = String(username || '').trim();
+  if (!user || !isAERequestPOS_(request)) return { status: 'error', message: 'Aksi klaim hanya tersedia untuk user AE yang login.' };
+  const verify = getAECoverageForPOS_(user);
+  if (!verify || verify.status !== 'success') return { status: 'error', message: 'Username AE tidak valid.' };
+  const sh = sheet_('POS_Accounts', posAccountHeaders_());
+  const lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try {
+    const rows = sh.getDataRange().getValues();
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][0]) !== String(accountId)) continue;
+      const currentOwner = String(rows[i][8] || '').trim();
+      if (currentOwner && currentOwner.toLowerCase() !== user.toLowerCase()) {
+        return { status: 'error', message: 'Akun POS sudah menjadi tanggung jawab ' + currentOwner + '.' };
+      }
+      const coverage = normalizeCoverageRestosPOS_(verify.coverage || []);
+      if (!coverage.some(name => name.toUpperCase() === String(rows[i][4] || '').trim().toUpperCase())) {
+        return { status: 'error', message: 'Resto akun POS belum masuk coverage AE Anda.' };
+      }
+      sh.getRange(i + 1, 9).setValue(user);
+      return { status: 'success', message: 'AE Pengelola berhasil ditetapkan.', aeManager: user };
+    }
+    return { status: 'error', message: 'Akun POS tidak ditemukan.' };
+  } finally { lock.releaseLock(); }
 }
-function closeModal(){$('modal').classList.add('hidden');$('trackingCard').scrollIntoView({behavior:'smooth',block:'center'});}
-bindDynamicControls();
-$('orderHistoryList').addEventListener('click',event=>{const track=event.target.closest('[data-history-track]');const remove=event.target.closest('[data-history-remove]');if(track)openHistoryOrder(track.dataset.historyTrack);if(remove)removeHistoryOrder(remove.dataset.historyRemove);});
-renderOrderHistory();
-(async function init(){
-  if(!outletParam||!apiBase){$('outletStatus').textContent='QR belum lengkap';$('outletStatus').className='badge off';setNotice(!outletParam?'Parameter outlet tidak ditemukan pada QR Code.':'URL API GAS POS belum dipasang pada QR Code.','error');$('menus').innerHTML='<div class="notice error">Form tidak dapat digunakan. Buka melalui QR outlet yang memiliki parameter outlet dan api.</div>';return;}
-  try{await loadConfig();await loadMenus();isReady=true;restoreOrderTracking();$('cartNotice').textContent='Menu, layanan, dan pembayaran berhasil dimuat dari backend POS.';renderCart();if(!Object.keys(orderConfig).some(k=>['pickup','dinein','delivery'].includes(k)&&orderConfig[k]))$('cartNotice').textContent='Outlet belum mengaktifkan jenis pesanan.';}
-  catch(err){console.error(err);$('outletStatus').textContent='Koneksi gagal';$('outletStatus').className='badge off';setNotice('Gagal memuat konfigurasi outlet: '+err.message,'error');$('menus').innerHTML='<div class="notice error">'+escapeHtml(err.message)+'</div>';}
-})();
-</script>
-</body>
-</html>
+
+function deletePosAccount_(id) {
+  const sh = SS.getSheetByName('POS_Accounts');
+  if (!sh) return { status: 'error', message: 'Akun tidak ditemukan.' };
+
+  const rows = sh.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) === String(id)) {
+      sh.deleteRow(i + 1);
+      return { status: 'success', message: 'Akun dihapus.' };
+    }
+  }
+  return { status: 'error', message: 'Akun tidak ditemukan.' };
+}
+
+function verifyPosLogin_(username, password) {
+  const user = String(username || '').trim().toLowerCase();
+  const hash = hashPassword_(password || '');
+  if (!user || !password) {
+    return { status: 'error', message: 'Username dan password wajib diisi.' };
+  }
+
+  const sh = sheet_('POS_Accounts', posAccountHeaders_());
+  const rows = sh.getDataRange().getValues();
+
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][1]).trim().toLowerCase() === user) {
+      if (String(rows[i][5] || 'AKTIF').toUpperCase() !== 'AKTIF') {
+        return { status: 'error', message: 'Akun POS tidak aktif.' };
+      }
+      const storedPassword = String(rows[i][2] || '');
+      // Password baru tersimpan plaintext. Dukungan hash SHA-256 tetap dipertahankan
+      // sementara agar akun lama masih dapat login; hash lama tidak bisa ditampilkan
+      // sebagai password asli dan harus di-reset dari Management Account.
+      const passwordMatches = storedPassword === String(password) || storedPassword === hash;
+      if (!passwordMatches) {
+        return { status: 'error', message: 'Password salah.' };
+      }
+      return {
+        status: 'success',
+        user: {
+          username: String(rows[i][1]),
+          brand: String(rows[i][3] || '').toUpperCase(),
+          resto: String(rows[i][4] || ''),
+          type: String(rows[i][7] || '').trim().toUpperCase(),
+          posType: String(rows[i][7] || '').trim().toUpperCase(),
+          role: 'kasir'
+        }
+      };
+    }
+  }
+  return { status: 'error', message: 'Akun POS tidak ditemukan.' };
+}
+
+/**
+ * Validasi sesi lokal pada setiap pemuatan POS.
+ * Akun yang sudah dihapus atau dinonaktifkan tidak dapat memakai sesi localStorage lama.
+ */
+function verifyPosSession_(username) {
+  const user = String(username || '').trim().toLowerCase();
+  if (!user) return { status: 'error', message: 'Username sesi tidak tersedia.' };
+
+  const sh = sheet_('POS_Accounts', posAccountHeaders_());
+  const rows = sh.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][1] || '').trim().toLowerCase() !== user) continue;
+    if (String(rows[i][5] || 'AKTIF').trim().toUpperCase() !== 'AKTIF') {
+      return { status: 'error', message: 'Akun POS sudah dinonaktifkan. Silakan login ulang atau hubungi AE.' };
+    }
+    return {
+      status: 'success',
+      user: {
+        username: String(rows[i][1]),
+        brand: String(rows[i][3] || '').toUpperCase(),
+        resto: String(rows[i][4] || ''),
+        type: String(rows[i][7] || '').trim().toUpperCase(),
+        posType: String(rows[i][7] || '').trim().toUpperCase(),
+        role: 'kasir'
+      }
+    };
+  }
+  return { status: 'error', message: 'Akun POS sudah dihapus dari server. Silakan login dengan akun aktif.' };
+}
+
+/**
+ * Jalankan manual hanya jika memang ingin membuat akun contoh/default.
+ * Tidak perlu dijalankan jika akun sudah dikelola melalui halaman AE.
+ */
+function setupDefaultAccounts() {
+  savePosAccount_({
+    username: 'kasir_ngeumi',
+    password: 'password123',
+    brand: 'NGEUMI',
+    resto: 'Outlet Priangan 2',
+    type: 'SATELIT',
+    active: true
+  });
+  savePosAccount_({
+    username: 'kasir_lazatto',
+    password: 'password123',
+    brand: 'LAZATTO',
+    resto: 'Outlet Priangan 2',
+    type: 'SATELIT',
+    active: true
+  });
+  Logger.log('Akun contoh kasir_ngeumi dan kasir_lazatto berhasil dibuat.');
+}
+
+function parseItemsFromRow_(row) {
+  // Kolom Q (17) adalah Items JSON pada format terbaru.
+  const rawJson = row.length >= 17 ? String(row[16] || '') : '';
+  if (rawJson) {
+    try {
+      const parsed = JSON.parse(rawJson);
+      if (Array.isArray(parsed)) return normalizeItems_(parsed);
+    } catch (ignore) {}
+  }
+
+  // Transaksi lama hanya menyimpan teks "Nama (x2)". Ubah menjadi array sederhana
+  // agar dashboard tetap bisa menampilkan item lama, meski harga per item tidak tersedia.
+  const detail = String(row[4] || '');
+  if (!detail) return [];
+  return detail.split(/,\s*(?![^()]*\))/).map(function(part) {
+    const match = part.match(/^(.*?)\s*\(x([\d.]+)\)\s*$/i);
+    if (!match) return null;
+    return {
+      id: '',
+      name: String(match[1] || '').trim(),
+      qty: Number(match[2]) || 0,
+      price: 0,
+      subtotal: 0,
+      category: '',
+      sku: ''
+    };
+  }).filter(function(item) {
+    return item && item.name && item.qty > 0;
+  });
+}
+
+function normalizeAERestoKeyPOS_(value) {
+  return String(value || '').trim().toUpperCase().replace(/\s+/g, ' ');
+}
+
+function getAEPrimaryAssignmentsPOS_() {
+  const cache = CacheService.getScriptCache();
+  const key = 'AE_PRIMARY_ASSIGNMENTS_V1';
+  const cached = cache.get(key);
+  if (cached) { try { return JSON.parse(cached); } catch (ignore) {} }
+  try {
+    const response = UrlFetchApp.fetch(AE_ADMIN_API_URL_POS, {
+      method: 'post', contentType: 'application/json',
+      payload: JSON.stringify({ action: 'getAEPrimaryAssignments' }),
+      muteHttpExceptions: true
+    });
+    const data = JSON.parse(response.getContentText() || '{}');
+    if (data && data.status === 'success' && data.assignments) {
+      const assignments = {};
+      Object.keys(data.assignments).forEach(k => { assignments[normalizeAERestoKeyPOS_(k)] = String(data.assignments[k] || '').trim(); });
+      cache.put(key, JSON.stringify(assignments), 300);
+      return assignments;
+    }
+  } catch (e) { /* cache miss: fallback local below */ }
+  return {};
+}
+
+function getPosAccountByUsernamePOS_(username) {
+  const key = String(username || '').trim().toLowerCase();
+  if (!key) return null;
+  return listPosAccounts_().find(a => String(a.username || '').trim().toLowerCase() === key) || null;
+}
+
+function resolveAEPayoutOwnerPOS_(resto, posUsername, source) {
+  const account = getPosAccountByUsernamePOS_(posUsername);
+  const accountType = String(account && (account.posType || account.type) || '').trim().toUpperCase();
+  const sourceType = String(source || '').trim().toUpperCase();
+  const isEventOrSatellite = ['EVENT', 'SATELIT', 'SATELLITE'].includes(accountType) ||
+    ['EVENT', 'SATELIT', 'SATELLITE'].includes(sourceType);
+  // Event/Satelit wajib memiliki AE Pengelola akun. Jangan jatuhkan pencapaiannya
+  // ke Primary AE hanya karena akun POS belum dikonfigurasi.
+  if (isEventOrSatellite) return String(account && account.aeManager || '').trim();
+  const assignments = getAEPrimaryAssignmentsPOS_();
+  return String(assignments[normalizeAERestoKeyPOS_(resto)] || '').trim();
+}
+
+function formatDateValue_(value) {
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ss");
+  }
+  return String(value || '');
+}
+
+function getTransactions_(filter) {
+  filter = filter || {};
+  const coverageRestos = normalizeCoverageRestosPOS_(
+    filter.coverage_restos || filter.coverageRestos || filter.coverageResto || filter.restos
+  );
+  const hasCoverageFilter = Array.isArray(filter.coverage_restos) ||
+    Array.isArray(filter.coverageRestos) || Array.isArray(filter.coverageResto) ||
+    Array.isArray(filter.restos) ||
+    typeof filter.coverage_restos === 'string' ||
+    typeof filter.coverageRestos === 'string' ||
+    typeof filter.coverageResto === 'string' ||
+    typeof filter.restos === 'string';
+  const coverageSet = {};
+  coverageRestos.forEach(function(name) { coverageSet[name.toUpperCase()] = true; });
+  const sh = SS.getSheetByName('Transactions');
+  if (!sh || sh.getLastRow() < 2) return [];
+
+  const rows = sh.getDataRange().getValues();
+  const out = [];
+  const aeAccountByUsername = {};
+  let aePrimaryAssignments = {};
+  if (filter._serverAERequest) {
+    listPosAccounts_().forEach(function(account) {
+      const key = String(account.username || '').trim().toLowerCase();
+      if (key) aeAccountByUsername[key] = account;
+    });
+    aePrimaryAssignments = getAEPrimaryAssignmentsPOS_();
+  }
+
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r[0]) continue;
+
+    const dateISO = String(r[15] || '');
+    const dateValue = dateISO || formatDateValue_(r[1]);
+    const transaction = {
+      id: String(r[0]),
+      dateISO: dateISO,
+      date: dateValue,
+      cashier: String(r[2] || ''),
+      paymentMethod: String(r[3] || ''),
+      items: parseItemsFromRow_(r),
+      itemsText: String(r[4] || ''),
+      subtotal: Number(r[5]) || 0,
+      discount: Number(r[6]) || 0,
+      total: Number(r[7]) || 0,
+      cashGiven: Number(r[8]) || 0,
+      change: Number(r[9]) || 0,
+      resto: String(r[10] || ''),
+      brand: String(r[11] || ''),
+      salesSource: String(r[12] || 'Reguler'),
+      shiftId: String(r[13] || ''),
+      shiftStatus: String(r[14] || 'OPEN'),
+      posUsername: String(r[17] || ''),
+      aePayoutOwner: String(r[18] || '')
+    };
+
+    const transactionDate = transaction.date.slice(0, 10);
+    if (filter.date && transactionDate !== String(filter.date).slice(0, 10)) continue;
+    if (filter._serverAERequest) {
+      const currentAE = String(filter._serverAEUser || '').trim().toLowerCase();
+      let payoutOwner = String(transaction.aePayoutOwner || '').trim();
+      if (!payoutOwner) {
+        const account = aeAccountByUsername[String(transaction.posUsername || '').trim().toLowerCase()];
+        const accountType = String(account && (account.posType || account.type) || '').trim().toUpperCase();
+        if (accountType === 'EVENT' || accountType === 'SATELIT') payoutOwner = String(account.aeManager || '').trim();
+        else payoutOwner = String(aePrimaryAssignments[normalizeAERestoKeyPOS_(transaction.resto)] || '').trim();
+        transaction._specialPosAccount = ['EVENT','SATELIT','SATELLITE'].includes(accountType) ||
+          ['EVENT','SATELIT','SATELLITE'].includes(String(transaction.salesSource || '').trim().toUpperCase());
+      }
+      // Fallback aman untuk data lama saat endpoint Primary belum tersedia.
+      if (!payoutOwner && !transaction._specialPosAccount && !['EVENT','SATELIT'].includes(String(transaction.salesSource || '').toUpperCase())) {
+        const primarySet = {};
+        normalizeCoverageRestosPOS_(filter.primary_restos || []).forEach(name => { primarySet[normalizeAERestoKeyPOS_(name)] = true; });
+        if (primarySet[normalizeAERestoKeyPOS_(transaction.resto)]) payoutOwner = filter._serverAEUser;
+      }
+      if (!currentAE || payoutOwner.toLowerCase() !== currentAE) continue;
+    } else if (hasCoverageFilter && !coverageSet[transaction.resto.trim().toUpperCase()]) continue;
+    if (filter.resto && transaction.resto !== String(filter.resto)) continue;
+    if (filter.brand && transaction.brand.toUpperCase() !== String(filter.brand).toUpperCase()) continue;
+    if (filter.salesSource && transaction.salesSource.toLowerCase() !== String(filter.salesSource).toLowerCase()) continue;
+
+    out.push(transaction);
+  }
+
+  return out;
+}
+
+function saveBigOrderForRequestPOS_(order, request) {
+  request = request || {};
+  if (!isAERequestPOS_(request)) return saveBigOrder_(order);
+  const user = String(request.userId || request.username || request.requester || '').trim();
+  if (!user) return { status: 'error', message: 'Identitas AE tidak dikirim.' };
+  const coverageResult = getAECoverageForPOS_(user);
+  const coverage = normalizeCoverageRestosPOS_(coverageResult.coverage || []);
+  const allowed = {};
+  coverage.forEach(function(name) { allowed[name.toUpperCase()] = true; });
+  const selected = normalizeCoverageRestosPOS_(order && (order.restos || order.resto));
+  if (!selected.length) return { status: 'error', message: 'Pilih minimal satu resto untuk Big Order.' };
+  const outside = selected.filter(function(name) { return !allowed[name.toUpperCase()]; });
+  if (outside.length) return { status: 'error', message: 'Big Order hanya boleh memakai resto dalam coverage AE Anda: ' + outside.join(', ') };
+  const safeOrder = Object.assign({}, order || {}, { restos: selected, createdBy: user });
+  return saveBigOrder_(safeOrder);
+}
+
+function saveBigOrder_(order) {
+  if (!order || !order.date || !String(order.name || '').trim() || !(Number(order.amount) > 0)) {
+    throw new Error('Tanggal, nama pesanan, dan nominal wajib diisi.');
+  }
+
+  const sh = sheet_('AE_BigOrders', ['ID', 'Tanggal', 'Resto', 'Nama Pesanan', 'Nominal', 'Dibuat Oleh', 'Dibuat']);
+  const restos = Array.isArray(order.restos) ? order.restos.join(', ') : String(order.resto || '');
+  const id = order.id || Utilities.getUuid();
+
+  sh.appendRow([
+    id, order.date, restos, String(order.name).trim(),
+    Number(order.amount) || 0, String(order.createdBy || ''), new Date()
+  ]);
+
+  return {
+    status: 'success',
+    message: 'Big Order tersimpan di server.',
+    order: {
+      id: id,
+      date: order.date,
+      restos: restos,
+      name: order.name,
+      amount: Number(order.amount) || 0,
+      source: 'Big Order'
+    }
+  };
+}
+
+/**
+ * AE COVERAGE INTEGRATION (tambahan; tidak menghapus fungsi lama).
+ * Sheet AECoverage menggunakan format dari backend ADM:
+ * Username | RestoNames | UpdatedBy | UpdatedAt
+ * Pastikan sheet ini berada pada spreadsheet yang sama dengan backend POS.
+ */
+const AE_ADMIN_API_URL_POS = 'https://script.google.com/macros/s/AKfycbwn94FPpsde6D5GxfD7MCth_FfGOz5piJqcm0WxJ3x0HkggzdWKZiCORqr6JMaeQrhLYQ/exec';
+
+function getAECoverageForPOS_(username) {
+  const user = String(username || '').trim();
+  if (!user) return { status: 'error', message: 'Username AE tidak dikirim.', coverage: [] };
+  const cache = CacheService.getScriptCache();
+  const cacheKey = 'AE_COVERAGE_' + Utilities.base64EncodeWebSafe(user.toLowerCase()).slice(0, 80);
+  const cached = cache.get(cacheKey);
+  if (cached) {
+    try { return JSON.parse(cached); } catch (ignore) {}
+  }
+  // Ambil coverage langsung dari backend ADM agar daftar admin menjadi sumber utama.
+  // Jika koneksi ADM gagal, gunakan sheet AECoverage lokal sebagai fallback.
+  try {
+    const response = UrlFetchApp.fetch(AE_ADMIN_API_URL_POS, {
+      method: 'post', contentType: 'application/json',
+      payload: JSON.stringify({ action: 'getAECoverage', userId: user, adminUser: user }),
+      muteHttpExceptions: true
+    });
+    const remote = JSON.parse(response.getContentText() || '{}');
+    if (remote && remote.status === 'success' && Array.isArray(remote.coverage)) {
+      const result = { status: 'success', userId: user, coverage: normalizeCoverageRestosPOS_(remote.coverage), primaryRestos: normalizeCoverageRestosPOS_(remote.primaryRestos || []), source: 'ADM' };
+      cache.put(cacheKey, JSON.stringify(result), 15);
+      return result;
+    }
+  } catch (remoteError) {
+    // Fallback lokal; jika keduanya tidak tersedia, hasil tetap kosong, bukan semua resto.
+  }
+  const sh = SS.getSheetByName('AECoverage');
+  if (!sh || sh.getLastRow() < 2) {
+    return { status: 'success', userId: user, coverage: [], message: 'Sheet AECoverage belum tersedia pada spreadsheet POS.' };
+  }
+  const rows = sh.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0] || '').trim().toLowerCase() === user.toLowerCase()) {
+      let raw = String(rows[i][1] || '').trim();
+      let coverage = [];
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          coverage = Array.isArray(parsed) ? parsed : raw.split(/[\n,]/);
+        } catch (e) { coverage = raw.split(/[\n,]/); }
+      }
+      const primaryRaw = String(rows[i][4] || '').trim();
+      let primary = [];
+      if (primaryRaw) { try { const parsedPrimary = JSON.parse(primaryRaw); primary = Array.isArray(parsedPrimary) ? parsedPrimary : primaryRaw.split(/[,\n]/); } catch (e) { primary = primaryRaw.split(/[,\n]/); } }
+      const result = { status: 'success', userId: user, coverage: normalizeCoverageRestosPOS_(coverage), primaryRestos: normalizeCoverageRestosPOS_(primary), source: 'POS_LOCAL' };
+      cache.put(cacheKey, JSON.stringify(result), 15);
+      return result;
+    }
+  }
+  const result = { status: 'success', userId: user, coverage: [], primaryRestos: [], message: 'Coverage AE belum diatur.' };
+  cache.put(cacheKey, JSON.stringify(result), 15);
+  return result;
+}
+
+function isAERequestPOS_(request) {
+  request = request || {};
+  const raw = String(request.role || request.userRole || '').trim().toLowerCase();
+  const compact = raw.replace(/[^a-z0-9]/g, '');
+  return compact === 'ae' || compact.includes('accountexecutive') ||
+    compact.includes('accounteksekutif') || compact.includes('acounteksekutif');
+}
+
+function applyServerCoverageForAE_POS_(request) {
+  request = request || {};
+  const user = String(request.userId || request.username || request.requester || '').trim();
+  if (!isAERequestPOS_(request)) return request;
+  if (!user) {
+    const missing = Object.assign({}, request);
+    missing.coverage_restos = [];
+    missing._serverAERequest = true;
+    missing._serverAEUser = '';
+    missing._serverAECoverageError = 'Identitas username AE tidak dikirim.';
+    return missing;
+  }
+
+  const result = getAECoverageForPOS_(user);
+  const copy = Object.assign({}, request);
+  // Jangan mempercayai daftar coverage dari browser; selalu gunakan data server.
+  // Coverage kosong/error harus menghasilkan data kosong, bukan membuka semua resto.
+  copy.coverage_restos = result && result.status === 'success' && Array.isArray(result.coverage)
+    ? normalizeCoverageRestosPOS_(result.coverage) : [];
+  copy.primary_restos = result && result.status === 'success' && Array.isArray(result.primaryRestos)
+    ? normalizeCoverageRestosPOS_(result.primaryRestos) : [];
+  copy._serverAEUser = user;
+  copy._serverAERequest = true;
+  if (!result || result.status !== 'success') {
+    copy._serverAECoverageError = result && result.message || 'Coverage AE gagal dibaca.';
+  }
+  return copy;
+}
+
+function getPosAccountsForRequestPOS_(request) {
+  const effective = applyServerCoverageForAE_POS_(request || {});
+  let accounts = listPosAccounts_();
+  if (effective._serverAERequest) {
+    const allowed = {};
+    normalizeCoverageRestosPOS_(effective.coverage_restos || []).forEach(function(name) { allowed[normalizeAERestoKeyPOS_(name)] = true; });
+    const currentAE = String(effective._serverAEUser || '').toLowerCase();
+    accounts = accounts.filter(function(account) {
+      const owner = String(account.aeManager || '').trim().toLowerCase();
+      const restoAllowed = !!allowed[normalizeAERestoKeyPOS_(account.resto)];
+      return owner === currentAE || (!owner && restoAllowed);
+    }).map(function(account) {
+      account.claimable = !String(account.aeManager || '').trim();
+      return account;
+    });
+  }
+  return { status: 'success', accounts: accounts,
+    coverage: effective._serverAERequest ? (effective.coverage_restos || []) : undefined,
+    primaryRestos: effective._serverAERequest ? (effective.primary_restos || []) : undefined,
+    message: effective._serverAECoverageError || '' };
+}
+
+function getTransactionsForRequestPOS_(request) {
+  const effective = applyServerCoverageForAE_POS_(request || {});
+  return { status: 'success', transactions: getTransactions_(effective) };
+}
+
+function getBigOrdersForRequestPOS_(request) {
+  const effective = applyServerCoverageForAE_POS_(request || {});
+  const orders = getBigOrders_();
+  if (effective._serverAERequest) {
+    const coverage = normalizeCoverageRestosPOS_(effective.coverage_restos || []);
+    const allowed = {};
+    coverage.forEach(function(name) { allowed[name.toUpperCase()] = true; });
+    const filtered = orders.filter(function(order) {
+      const names = String(order.resto || '').split(',').map(function(v) { return v.trim().toUpperCase(); }).filter(Boolean);
+      return names.some(function(name) { return !!allowed[name]; }) &&
+        String(order.createdBy || '').trim().toLowerCase() === String(effective._serverAEUser || '').toLowerCase();
+    });
+    return { status: 'success', orders: filtered };
+  }
+  return { status: 'success', orders: filterBigOrdersByCoveragePOS_(orders, effective) };
+}
+
+function normalizeCoverageRestosPOS_(value) {
+  if (value == null || value === '') return [];
+  let items = value;
+  if (typeof items === 'string') {
+    const raw = items.trim();
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      items = Array.isArray(parsed) ? parsed : raw.split(',');
+    } catch (e) {
+      items = raw.split(',');
+    }
+  }
+  if (!Array.isArray(items)) items = [items];
+  const seen = {};
+  return items.map(function(item) {
+    return String(item == null ? '' : item).trim();
+  }).filter(function(item) {
+    const key = item.toUpperCase();
+    if (!key || seen[key]) return false;
+    seen[key] = true;
+    return true;
+  });
+}
+
+function filterBigOrdersByCoveragePOS_(orders, filter) {
+  filter = filter || {};
+  const raw = filter.coverage_restos != null ? filter.coverage_restos :
+    filter.coverageRestos != null ? filter.coverageRestos :
+    filter.coverageResto != null ? filter.coverageResto : filter.restos;
+  const hasCoverageFilter = raw !== undefined && raw !== null;
+  if (!hasCoverageFilter) return orders;
+  const coverage = normalizeCoverageRestosPOS_(raw);
+  const allowed = {};
+  coverage.forEach(function(name) { allowed[name.toUpperCase()] = true; });
+  return orders.filter(function(order) {
+    const names = String(order.resto || '').split(',').map(function(v) {
+      return v.trim().toUpperCase();
+    }).filter(Boolean);
+    return names.some(function(name) { return !!allowed[name]; });
+  });
+}
+
+function getBigOrders_() {
+  const sh = SS.getSheetByName('AE_BigOrders');
+  if (!sh || sh.getLastRow() < 2) return [];
+
+  return sh.getDataRange().getValues().slice(1).filter(function(r) {
+    return r[0];
+  }).map(function(r) {
+    return {
+      id: String(r[0]),
+      date: String(r[1]),
+      resto: String(r[2] || ''),
+      name: String(r[3] || ''),
+      amount: Number(r[4]) || 0,
+      createdBy: String(r[5] || ''),
+      source: 'Big Order'
+    };
+  });
+}
+
+function closeShift_(shift) {
+  if (!shift) throw new Error('Data shift tidak lengkap.');
+
+  // POS build yang berbeda dapat mengirim id dengan nama properti berbeda.
+  const id = String(
+    shift.id || shift.shiftId || shift.shift_id ||
+    shift.currentShiftId || shift.current_shift_id || ''
+  ).trim();
+  if (!id) {
+    throw new Error('Shift ID tidak dikirim POS. Tutup shift dibatalkan agar transaksi tidak salah dicatat.');
+  }
+
+  // Buat sheet Transactions bila belum ada; shift tanpa penjualan tetap boleh ditutup.
+  const txSheet = sheet_('Transactions', TRANSACTION_HEADERS);
+  const all = txSheet.getLastRow() >= 2 ? txSheet.getDataRange().getValues() : [];
+  const matched = [];
+  const matchedRows = {};
+  for (let i = 1; i < all.length; i++) {
+    if (String(all[i][13] || '').trim() === id) {
+      matched.push({ row: i + 1, values: all[i] });
+      matchedRows[i + 1] = true;
+    }
+  }
+
+  // Identitas akun diambil dari payload tutup shift atau transaksi yang cocok.
+  const nestedUsername = shift.user && shift.user.username
+    ? shift.user.username
+    : (shift.account && shift.account.username ? shift.account.username : '');
+  const username = String(
+    shift.posUsername || shift.pos_username || shift.username ||
+    shift.accountUsername || shift.account_username ||
+    shift.cashierUsername || shift.cashier_username ||
+    nestedUsername ||
+    (matched.length ? matched[0].values[17] || matched[0].values[2] : '') || ''
+  ).trim();
+
+  // Migrasi transaksi versi lama: sebelum POS mengirim Shift ID/POS Username,
+  // transaksi dapat diikat ke shift aktif berdasarkan kasir, resto, brand, dan waktu.
+  const startedAt = Number(shift.startedAt || shift.shiftStartedAt || 0);
+  const startedDate = startedAt ? new Date(startedAt) : null;
+  if (username && startedDate && !isNaN(startedDate.getTime())) {
+    for (let i = 1; i < all.length; i++) {
+      const r = all[i];
+      const rowNumber = i + 1;
+      if (matchedRows[rowNumber]) continue;
+      if (String(r[13] || '').trim()) continue; // jangan ambil transaksi dari shift lain
+      const cashier = String(r[2] || '').trim().toLowerCase();
+      const savedUsername = String(r[17] || '').trim().toLowerCase();
+      const sameCashier = cashier === username.toLowerCase() ||
+        (savedUsername && savedUsername === username.toLowerCase());
+      const sameResto = !shift.resto ||
+        String(r[10] || '').trim().toLowerCase() === String(shift.resto).trim().toLowerCase();
+      const sameBrand = !shift.brand ||
+        String(r[11] || '').trim().toLowerCase() === String(shift.brand).trim().toLowerCase();
+      const txDate = r[15] ? new Date(r[15]) : null;
+      const afterShiftStart = txDate && !isNaN(txDate.getTime()) &&
+        txDate.getTime() >= startedDate.getTime();
+      if (sameCashier && sameResto && sameBrand && afterShiftStart) {
+        matched.push({ row: rowNumber, values: r });
+        matchedRows[rowNumber] = true;
+      }
+    }
+  }
+
+  // Jika tidak ada transaksi, arsip tetap dibuat dengan omset 0.
+  const accounts = listPosAccounts_();
+  const account = accounts.find(function(a) {
+    return username &&
+      String(a.username || '').trim().toLowerCase() === username.toLowerCase();
+  });
+
+  const posType = String(
+    shift.posType || shift.pos_type || shift.accountType ||
+    (account && (account.posType || account.type)) || ''
+  ).trim().toUpperCase();
+
+  if (posType !== 'EVENT' && posType !== 'SATELIT') {
+    throw new Error(
+      'Tipe POS untuk akun "' + (username || '(username kosong)') +
+      '" tidak teridentifikasi. Pastikan tipe akun pada menu Management Account adalah EVENT atau SATELIT.'
+    );
+  }
+
+  const salesSource = posType === 'EVENT' ? 'Event' : 'Satelit';
+  const aePayoutOwner = String(account && account.aeManager || '').trim();
+  let total = 0;
+  matched.forEach(function(item) {
+    const r = item.values;
+    total += Number(r[7]) || 0;
+    // Kolom M = Sumber Omset, N = Shift ID, O = Status Shift.
+    txSheet.getRange(item.row, 13, 1, 3).setValues([[salesSource, id, 'CLOSED']]);
+    // Isi username POS dan snapshot AE Pengelola untuk transaksi lama.
+    if (!String(r[17] || '').trim() && username) txSheet.getRange(item.row, 18).setValue(username);
+    if (aePayoutOwner && !String(r[18] || '').trim()) txSheet.getRange(item.row, 19).setValue(aePayoutOwner);
+  });
+
+  const closedAt = new Date();
+  const archive = sheet_('Shift_Archive', [
+    'Shift ID', 'Tanggal Tutup', 'Kasir', 'Resto', 'Brand',
+    'Total Omset', 'Jumlah Transaksi', 'Status', 'POS Username', 'Tipe POS'
+  ]);
+  const archiveLastRow = archive.getLastRow();
+  let archiveRow = 0;
+  if (archiveLastRow > 1) {
+    const found = archive.getRange(2, 1, archiveLastRow - 1, 1)
+      .createTextFinder(id).matchEntireCell(true).findNext();
+    if (found) archiveRow = found.getRow();
+  }
+  const archiveValues = [
+    id, closedAt, String(shift.cashier || ''), String(shift.resto || ''),
+    String(shift.brand || ''), total, matched.length, 'CLOSED', username, posType
+  ];
+  // Update arsip shift yang sama agar retry tidak membuat arsip ganda.
+  if (archiveRow) {
+    archive.getRange(archiveRow, 1, 1, archiveValues.length).setValues([archiveValues]);
+  } else {
+    archive.appendRow(archiveValues);
+  }
+
+  return {
+    status: 'success',
+    message: 'Shift ditutup. Omset otomatis dicatat ke ' + salesSource + '.',
+    shiftId: id,
+    posUsername: username,
+    posType: posType,
+    salesSource: salesSource,
+    total: total,
+    transactions: matched.length,
+    closedAt: closedAt
+  };
+}
+
+/**
+ * Backfill sekali untuk transaksi lama yang belum memiliki AE Pencapaian.
+ * Jalankan SETELAH Admin menetapkan PrimaryRestos dan akun POS memiliki AE Pengelola.
+ * Fungsi hanya mengisi sel kosong; tidak menimpa atribusi transaksi yang sudah tersimpan.
+ */
+function migrateAEPayoutOwnersPOS() {
+  const sh = sheet_('Transactions', TRANSACTION_HEADERS);
+  if (sh.getLastRow() < 2) return { status: 'success', updated: 0, unassigned: 0, message: 'Belum ada transaksi.' };
+  const rows = sh.getDataRange().getValues();
+  const accounts = {};
+  listPosAccounts_().forEach(function(a) { accounts[String(a.username || '').trim().toLowerCase()] = a; });
+  const assignments = getAEPrimaryAssignmentsPOS_();
+  let updated = 0, unassigned = 0;
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r[0] || String(r[18] || '').trim()) continue;
+    const posUsername = String(r[17] || '').trim().toLowerCase();
+    const account = accounts[posUsername];
+    const accountType = String(account && (account.posType || account.type) || '').trim().toUpperCase();
+    let owner = '';
+    if (accountType === 'EVENT' || accountType === 'SATELIT') owner = String(account.aeManager || '').trim();
+    else owner = String(assignments[normalizeAERestoKeyPOS_(r[10])] || '').trim();
+    if (owner) {
+      sh.getRange(i + 1, 19).setValue(owner);
+      updated++;
+    } else {
+      unassigned++;
+    }
+  }
+  return { status: 'success', updated: updated, unassigned: unassigned, message: 'Backfill selesai. Atribusi yang sudah terisi tidak diubah.' };
+}
+
+function getAEMetrics_(filter) {
+  filter = applyServerCoverageForAE_POS_(filter || {});
+  const transactions = getTransactions_(filter);
+  const orders = filter._serverAERequest
+    ? getBigOrdersForRequestPOS_(filter).orders
+    : filterBigOrdersByCoveragePOS_(getBigOrders_(), filter);
+
+  const accountRows = listPosAccounts_();
+  const accountByUsername = {};
+  accountRows.forEach(function(account) {
+    const key = String(account.username || '').trim().toLowerCase();
+    if (key) accountByUsername[key] = account;
+  });
+
+  const totalsByUsername = {};
+  transactions.forEach(function(t) {
+    const key = String(t.posUsername || '').trim().toLowerCase();
+    const account = key ? accountByUsername[key] : null;
+    const accountType = String(account && (account.posType || account.type) || '').trim().toUpperCase();
+
+    // Tipe POS master menjadi sumber klasifikasi utama.
+    if (accountType === 'EVENT' || accountType === 'SATELIT') {
+      t.posType = accountType;
+      if (String(t.shiftStatus || '').trim().toUpperCase() === 'CLOSED') {
+        t.salesSource = accountType === 'EVENT' ? 'Event' : 'Satelit';
+      }
+    }
+
+    if (!key) return;
+    if (!totalsByUsername[key]) {
+      totalsByUsername[key] = { username: t.posUsername, totalOmset: 0, jumlahTransaksi: 0 };
+    }
+    totalsByUsername[key].totalOmset += Number(t.total) || 0;
+    totalsByUsername[key].jumlahTransaksi += 1;
+  });
+
+  const accountMetrics = accountRows
+    .filter(function(account) {
+      if (!filter.brand) return true;
+      return String(account.brand || '').toUpperCase() === String(filter.brand).toUpperCase();
+    })
+    .filter(function(account) {
+      if (filter._serverAERequest) {
+        return String(account.aeManager || '').trim().toLowerCase() === String(filter._serverAEUser || '').trim().toLowerCase();
+      }
+      if (!filter.coverage_restos && !filter.coverageRestos &&
+          !filter.coverageResto && !filter.restos) return true;
+      const allowed = normalizeCoverageRestosPOS_(
+        filter.coverage_restos || filter.coverageRestos ||
+        filter.coverageResto || filter.restos
+      );
+      return allowed.some(function(name) {
+        return name.toUpperCase() === String(account.resto || '').trim().toUpperCase();
+      });
+    })
+    .map(function(account) {
+      const m = totalsByUsername[String(account.username || '').toLowerCase()] || {};
+      return {
+        id: account.id,
+        username: account.username,
+        brand: account.brand,
+        resto: account.resto,
+        type: account.type || account.posType || '',
+        posType: account.posType || account.type || '',
+        active: account.active,
+        aeManager: account.aeManager || '',
+        totalOmset: Number(m.totalOmset) || 0,
+        jumlahTransaksi: Number(m.jumlahTransaksi) || 0
+      };
+    });
+
+  // Hanya transaksi dengan status CLOSED masuk ke omset Event/Satelit.
+  const closedTransactions = transactions.filter(function(t) {
+    return String(t.shiftStatus || '').trim().toUpperCase() === 'CLOSED';
+  });
+  const eventTransactions = closedTransactions.filter(function(t) {
+    return String(t.salesSource || '').trim().toLowerCase() === 'event';
+  });
+  const satelliteTransactions = closedTransactions.filter(function(t) {
+    return String(t.salesSource || '').trim().toLowerCase() === 'satelit';
+  });
+
+  return {
+    status: 'success',
+    aeUsername: filter._serverAERequest ? filter._serverAEUser : '',
+    coverage: filter._serverAERequest ? normalizeCoverageRestosPOS_(filter.coverage_restos || []) : [],
+    primaryRestos: filter._serverAERequest ? normalizeCoverageRestosPOS_(filter.primary_restos || []) : [],
+    coverageReady: filter._serverAERequest ? !filter._serverAECoverageError : true,
+    coverageMessage: filter._serverAECoverageError || '',
+    transactions: transactions,
+    bigOrders: orders,
+    accounts: accountMetrics,
+    eventOmset: eventTransactions.reduce(function(sum, t) {
+      return sum + (Number(t.total) || 0);
+    }, 0),
+    satelitOmset: satelliteTransactions.reduce(function(sum, t) {
+      return sum + (Number(t.total) || 0);
+    }, 0),
+    totalOmset: transactions.reduce(function(sum, t) {
+      return sum + (Number(t.total) || 0);
+    }, 0)
+  };
+}
+
+/**
+ * Ringkasan pencapaian seluruh AE untuk widget monitoring area.
+ * Omset POS hanya dihitung pada shift CLOSED; Event/Satelit mengikuti AE Manager akun,
+ * Reguler mengikuti AE Payout Owner / Primary AE; Big Order mengikuti pembuat order.
+ */
+function getAEAreaAchievement_(request) {
+  request = request || {};
+  const txSheet = SS.getSheetByName('Transactions');
+  const accounts = listPosAccounts_();
+  const accountByUsername = {};
+  accounts.forEach(function(account) {
+    const key = String(account.username || '').trim().toLowerCase();
+    if (key) accountByUsername[key] = account;
+  });
+
+  const rowsByAE = {};
+  function ensureAE(username) {
+    const display = String(username || '').trim();
+    const key = display.toLowerCase();
+    if (!key) return null;
+    if (!rowsByAE[key]) rowsByAE[key] = {
+      username: display, name: display, reguler: 0, bigOrder: 0,
+      event: 0, satelit: 0, total: 0
+    };
+    return rowsByAE[key];
+  }
+
+  // Read only columns needed for summary; avoid parsing item JSON for every POS transaction.
+  let primaryAssignments = null;
+  if (txSheet && txSheet.getLastRow() >= 2) {
+    const lastRow = txSheet.getLastRow();
+    const data = txSheet.getRange(2, 8, lastRow - 1, 12).getValues(); // H:S
+    let needsPrimaryFallback = false;
+    data.forEach(function(r) {
+      const total = Number(r[0]) || 0; // H Total
+      const resto = String(r[3] || '').trim(); // K Resto
+      const source = String(r[5] || 'Reguler').trim().toUpperCase(); // M Source
+      const status = String(r[7] || 'OPEN').trim().toUpperCase(); // O Shift status
+      const posUsername = String(r[10] || '').trim().toLowerCase(); // R POS Username
+      const payoutOwner = String(r[11] || '').trim(); // S AE Pencapaian
+      if (status !== 'CLOSED' || !total) return;
+      const account = accountByUsername[posUsername] || null;
+      const posType = String(account && (account.posType || account.type) || source).trim().toUpperCase();
+      if (posType === 'EVENT' || posType === 'SATELIT' || posType === 'SATELLITE') {
+        const owner = payoutOwner || String(account && account.aeManager || '').trim();
+        const ae = ensureAE(owner);
+        if (!ae) return;
+        if (posType === 'EVENT') ae.event += total;
+        else ae.satelit += total;
+        ae.total += total;
+      } else if (!payoutOwner) {
+        needsPrimaryFallback = true;
+      } else {
+        const ae = ensureAE(payoutOwner);
+        if (!ae) return;
+        ae.reguler += total;
+        ae.total += total;
+      }
+    });
+
+    // Fallback only when legacy regular transactions lack explicit AE attribution.
+    if (needsPrimaryFallback) {
+      primaryAssignments = getAEPrimaryAssignmentsPOS_();
+      data.forEach(function(r) {
+        const total = Number(r[0]) || 0;
+        const resto = String(r[3] || '').trim();
+        const source = String(r[5] || 'Reguler').trim().toUpperCase();
+        const status = String(r[7] || 'OPEN').trim().toUpperCase();
+        const posUsername = String(r[10] || '').trim().toLowerCase();
+        const payoutOwner = String(r[11] || '').trim();
+        if (status !== 'CLOSED' || !total || payoutOwner) return;
+        const account = accountByUsername[posUsername] || null;
+        const posType = String(account && (account.posType || account.type) || source).trim().toUpperCase();
+        if (posType === 'EVENT' || posType === 'SATELIT' || posType === 'SATELLITE') return;
+        const owner = String(primaryAssignments[normalizeAERestoKeyPOS_(resto)] || '').trim();
+        const ae = ensureAE(owner);
+        if (!ae) return;
+        ae.reguler += total;
+        ae.total += total;
+      });
+    }
+  }
+
+  getBigOrders_().forEach(function(order) {
+    const ae = ensureAE(order.createdBy);
+    if (!ae) return;
+    const amount = Number(order.amount) || 0;
+    ae.bigOrder += amount;
+    ae.total += amount;
+  });
+
+  const rows = Object.keys(rowsByAE).map(function(key) { return rowsByAE[key]; })
+    .sort(function(a, b) { return b.total - a.total; });
+  return { status: 'success', rows: rows, updatedAt: new Date().toISOString() };
+}
+
+
+
+/* ========================================================================
+ * ONLINE ORDER MODULE - MENYATU DENGAN BACKEND POS EXISTING
+ * Database: Spreadsheet POS yang sama (const SS).
+ * Sumber menu: sheet Products (ID, Nama Produk, Kategori, Harga, Icon, Brand, SKU).
+ * Sumber akun/outlet: sheet POS_Accounts yang sudah dipakai login POS.
+ *
+ * Tidak membuat doGet/doPost kedua. Semua routing masuk ke handler POS existing.
+ * ====================================================================== */
+
+const ONLINE_ORDER_HEADERS_ = {
+  orders: [
+    'Order ID','Created At','Outlet Code','POS Username','Outlet Name','Brand',
+    'Customer Name','WhatsApp','Order Type','Delivery Address','Payment Method',
+    'Payment Status','Proof File ID','Proof URL','Notes','Subtotal',
+    'Delivery Fee','Total','Order Status','Source','Status History JSON','Payment History JSON'
+  ],
+  items: [
+    'Order ID','Product ID','Product Name','Category','Qty','Unit Price','Line Total','SKU'
+  ],
+  config: [
+    'Outlet Code','POS Username','Outlet Name','Brand',
+    'Pickup Enabled','Dine In Enabled','Delivery Enabled',
+    'Cash Enabled','QRIS Enabled','Transfer Enabled',
+    'Delivery Fee','Active','QRIS Image URL','Updated At','Updated By'
+  ]
+};
+
+const ONLINE_ORDER_MAX_PROOF_BYTES_ = 5 * 1024 * 1024;
+
+/**
+ * Jalankan SATU KALI dari editor Apps Script POS.
+ * Hanya membuat 3 sheet online order jika belum ada.
+ * Tidak mengubah atau menghapus sheet POS yang sudah ada.
+ */
+function setupOnlineOrderSheets_() {
+  sheet_('OnlineOrders', ONLINE_ORDER_HEADERS_.orders);
+  sheet_('OnlineOrderItems', ONLINE_ORDER_HEADERS_.items);
+  sheet_('OnlineOrderConfig', ONLINE_ORDER_HEADERS_.config);
+  return {
+    ok: true,
+    status: 'success',
+    message: 'Sheet OnlineOrders, OnlineOrderItems, dan OnlineOrderConfig siap di Spreadsheet POS existing.'
+  };
+}
+
+// Wrapper publik agar mudah dijalankan dari menu Run di Apps Script editor.
+function setupOnlineOrderSheets() {
+  return setupOnlineOrderSheets_();
+}
+
+/**
+ * Opsional: buat baris konfigurasi default NONAKTIF untuk setiap akun POS aktif
+ * yang belum memiliki baris konfigurasi. OutletCode awal menggunakan Username POS.
+ * Admin perlu mengaktifkan jenis order/metode pembayaran pada sheet OnlineOrderConfig.
+ */
+function syncOnlineOrderConfigFromPOSAccounts_() {
+  setupOnlineOrderSheets_();
+  const accountSheet = SS.getSheetByName('POS_Accounts');
+  const configSheet = SS.getSheetByName('OnlineOrderConfig');
+  if (!accountSheet || accountSheet.getLastRow() < 2) {
+    return { status: 'success', created: 0, message: 'Belum ada akun POS.' };
+  }
+  const existing = configSheet.getLastRow() > 1
+    ? configSheet.getRange(2, 1, configSheet.getLastRow() - 1, 1).getDisplayValues().flat()
+    : [];
+  const seen = {};
+  existing.forEach(function(v){ seen[String(v).trim().toLowerCase()] = true; });
+
+  const rows = accountSheet.getDataRange().getValues();
+  const additions = [];
+  for (let i = 1; i < rows.length; i++) {
+    const username = String(rows[i][1] || '').trim();
+    const active = String(rows[i][5] || 'AKTIF').trim().toUpperCase() === 'AKTIF';
+    if (!username || !active || seen[username.toLowerCase()]) continue;
+    additions.push([
+      username, username, String(rows[i][4] || ''), String(rows[i][3] || '').toUpperCase(),
+      false, false, false, false, false, false, 0, false, '', new Date(), 'SETUP'
+    ]);
+    seen[username.toLowerCase()] = true;
+  }
+  if (additions.length) {
+    configSheet.getRange(configSheet.getLastRow() + 1, 1, additions.length, ONLINE_ORDER_HEADERS_.config.length)
+      .setValues(additions);
+  }
+  return { status: 'success', created: additions.length, message: 'Baris konfigurasi outlet dibuat dalam keadaan NONAKTIF.' };
+}
+
+// Wrapper publik untuk membuat baris konfigurasi default NONAKTIF dari akun POS.
+function syncOnlineOrderConfigFromPOSAccounts() {
+  return syncOnlineOrderConfigFromPOSAccounts_();
+}
+
+function onlineOrderBool_(value) {
+  if (value === true || value === 1) return true;
+  return ['TRUE','1','YA','YES','AKTIF','ACTIVE','ON'].includes(String(value || '').trim().toUpperCase());
+}
+
+function onlineOrderAccountByUsername_(username) {
+  const sh = SS.getSheetByName('POS_Accounts');
+  if (!sh || sh.getLastRow() < 2) return null;
+  const rows = sh.getDataRange().getValues();
+  const wanted = String(username || '').trim().toLowerCase();
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][1] || '').trim().toLowerCase() !== wanted) continue;
+    if (String(rows[i][5] || 'AKTIF').trim().toUpperCase() !== 'AKTIF') return null;
+    return {
+      id: String(rows[i][0] || ''),
+      username: String(rows[i][1] || ''),
+      brand: String(rows[i][3] || '').trim().toUpperCase(),
+      resto: String(rows[i][4] || '').trim(),
+      active: true
+    };
+  }
+  return null;
+}
+
+function onlineOrderConfigRow_(outletCode) {
+  const sh = sheet_('OnlineOrderConfig', ONLINE_ORDER_HEADERS_.config);
+  if (sh.getLastRow() < 2) return null;
+  const rows = sh.getDataRange().getValues();
+  const wanted = String(outletCode || '').trim().toLowerCase();
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0] || '').trim().toLowerCase() !== wanted) continue;
+    return {
+      rowNumber: i + 1,
+      outletCode: String(rows[i][0] || '').trim(),
+      posUsername: String(rows[i][1] || rows[i][0] || '').trim(),
+      outletName: String(rows[i][2] || '').trim(),
+      brand: String(rows[i][3] || '').trim().toUpperCase(),
+      pickup: onlineOrderBool_(rows[i][4]),
+      dinein: onlineOrderBool_(rows[i][5]),
+      delivery: onlineOrderBool_(rows[i][6]),
+      cash: onlineOrderBool_(rows[i][7]),
+      qris: onlineOrderBool_(rows[i][8]),
+      transfer: onlineOrderBool_(rows[i][9]),
+      deliveryFee: Math.max(0, Number(rows[i][10]) || 0),
+      active: onlineOrderBool_(rows[i][11]),
+      qrisImageUrl: String(rows[i][12] || '').trim()
+    };
+  }
+  return null;
+}
+
+function onlineOrderResolveOutlet_(outletCode) {
+  const cfg = onlineOrderConfigRow_(outletCode);
+  if (!cfg) throw new Error('Outlet belum memiliki konfigurasi Online Order.');
+  if (!cfg.active) throw new Error('Online Order untuk outlet ini sedang nonaktif.');
+  const account = onlineOrderAccountByUsername_(cfg.posUsername);
+  if (!account) throw new Error('Akun POS outlet tidak ditemukan atau sudah nonaktif.');
+  if (cfg.brand && cfg.brand !== account.brand) throw new Error('Brand konfigurasi tidak cocok dengan akun POS.');
+  cfg.brand = account.brand;
+  cfg.outletName = cfg.outletName || account.resto || account.username;
+  cfg.posUsername = account.username;
+  return cfg;
+}
+
+/** Endpoint publik: mengambil konfigurasi layanan untuk QR outlet. */
+function getOnlineOrderConfig_(outletCode) {
+  try {
+    const cfg = onlineOrderResolveOutlet_(outletCode);
+    return {
+      ok: true, status: 'success',
+      outlet: cfg.outletCode,
+      outletName: cfg.outletName,
+      brand: cfg.brand,
+      qrisImageUrl: cfg.qrisImageUrl,
+      config: {
+        pickup: cfg.pickup, dinein: cfg.dinein, delivery: cfg.delivery,
+        cash: cfg.cash, qris: cfg.qris && !!cfg.qrisImageUrl, transfer: cfg.transfer,
+        deliveryFee: cfg.deliveryFee
+      }
+    };
+  } catch (err) {
+    return { ok: false, status: 'error', message: String(err.message || err) };
+  }
+}
+
+/** Endpoint publik: menu dibaca langsung dari Products POS, difilter berdasarkan Brand outlet. */
+function getOnlineOrderProducts_(outletCode) {
+  try {
+    const cfg = onlineOrderResolveOutlet_(outletCode);
+    const products = getProductsFromSheet()
+      .filter(function(p) {
+        const productBrand = String(p.brand || '').trim().toUpperCase();
+        return !productBrand || productBrand === cfg.brand;
+      })
+      .map(function(p) {
+        return {
+          id: String(p.id),
+          name: p.name,
+          category: p.category || p.kategori || 'Menu',
+          price: Number(p.price) || 0,
+          icon: p.icon || '🍽️',
+          image: '',
+          sku: p.sku || '',
+          active: true
+        };
+      });
+    return { ok: true, status: 'success', outlet: cfg.outletCode, brand: cfg.brand, products: products };
+  } catch (err) {
+    return { ok: false, status: 'error', message: String(err.message || err), products: [] };
+  }
+}
+
+/**
+ * Mengambil konfigurasi outlet yang sedang login, termasuk saat outlet belum aktif.
+ * Digunakan oleh modal POS agar pengaturan dapat dimuat dari Spreadsheet, bukan hanya localStorage.
+ */
+function getOnlineOrderConfigForPOS_(data) {
+  data = data || {};
+  const session = verifyPosSession_(data.username);
+  if (!session || session.status !== 'success') {
+    throw new Error('Sesi POS tidak valid atau akun sudah nonaktif. Silakan login ulang.');
+  }
+  const username = String(session.user.username || '').trim();
+  // Pastikan akun baru yang aktif memiliki baris konfigurasi default jika belum ada.
+  let cfg = onlineOrderConfigRow_(username);
+  if (!cfg) {
+    syncOnlineOrderConfigFromPOSAccounts_();
+    cfg = onlineOrderConfigRow_(username);
+  }
+  return {
+    status: 'success',
+    exists: !!cfg,
+    config: cfg ? {
+      pickup: cfg.pickup,
+      dinein: cfg.dinein,
+      delivery: cfg.delivery,
+      cash: cfg.cash,
+      qris: cfg.qris,
+      transfer: cfg.transfer,
+      deliveryFee: cfg.deliveryFee,
+      active: cfg.active,
+      qrisImageUrl: cfg.qrisImageUrl
+    } : {
+      pickup: false, dinein: false, delivery: false,
+      cash: false, qris: false, transfer: false,
+      deliveryFee: 0, active: false, qrisImageUrl: ''
+    }
+  };
+}
+
+/**
+ * Menyimpan konfigurasi Online Order untuk akun POS yang sedang login.
+ * Tidak meminta password ulang; server memeriksa bahwa username masih merupakan akun POS aktif.
+ * Model validasi ini mengikuti validasi sesi POS existing.
+ */
+function saveOnlineOrderConfig_(data) {
+  data = data || {};
+  const session = verifyPosSession_(data.username);
+  if (!session || session.status !== 'success') {
+    throw new Error('Sesi POS tidak valid atau akun sudah nonaktif. Silakan login ulang.');
+  }
+  const username = String(session.user.username || '').trim();
+  const account = onlineOrderAccountByUsername_(username);
+  if (!account) throw new Error('Akun POS tidak aktif.');
+  const code = String(data.outletCode || username).trim();
+  if (code.toLowerCase() !== username.toLowerCase()) {
+    throw new Error('Akun POS hanya dapat mengubah konfigurasi outlet miliknya sendiri.');
+  }
+
+  // Ambil URL lama agar pilihan QRIS tidak hilang saat hanya mengubah layanan/ongkir.
+  let currentCfg = onlineOrderConfigRow_(code);
+  if (!currentCfg) {
+    syncOnlineOrderConfigFromPOSAccounts_();
+    currentCfg = onlineOrderConfigRow_(code);
+  }
+  const oldQrisImageUrl = String((currentCfg && currentCfg.qrisImageUrl) || '').trim();
+  let qrisImageUrl = String(
+    data.qrisImageUrl || oldQrisImageUrl || ''
+  ).trim();
+  let qrisImageUploaded = false;
+  if (String(data.qrisImageData || '').trim()) {
+    const uploaded = onlineOrderSaveQrisImage_(
+      data.qrisImageData,
+      data.qrisImageName,
+      username
+    );
+    qrisImageUrl = uploaded.url;
+    qrisImageUploaded = true;
+  }
+
+  const active = data.active === true || onlineOrderBool_(data.active);
+  const qrisEnabled = data.qris === true || onlineOrderBool_(data.qris);
+  if (active && qrisEnabled && !qrisImageUrl) {
+    throw new Error('Upload gambar QRIS terlebih dahulu atau nonaktifkan metode QRIS.');
+  }
+
+  const sh = sheet_('OnlineOrderConfig', ONLINE_ORDER_HEADERS_.config);
+  const cfg = [
+    code, username, account.resto, account.brand,
+    onlineOrderBool_(data.pickup), onlineOrderBool_(data.dinein), onlineOrderBool_(data.delivery),
+    onlineOrderBool_(data.cash), qrisEnabled, onlineOrderBool_(data.transfer),
+    Math.max(0, Number(data.deliveryFee) || 0),
+    active, qrisImageUrl,
+    new Date(), username
+  ];
+  const rows = sh.getDataRange().getValues();
+  let rowNumber = -1;
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0] || '').trim().toLowerCase() === code.toLowerCase()) {
+      rowNumber = i + 1;
+      break;
+    }
+  }
+  if (rowNumber > 0) sh.getRange(rowNumber, 1, 1, cfg.length).setValues([cfg]);
+  else sh.appendRow(cfg);
+
+  // Jika gambar QRIS diganti, pindahkan file lama ke Sampah hanya bila file itu
+  // memang berada di folder QRIS milik modul ini (file eksternal tidak disentuh).
+  if (qrisImageUploaded && oldQrisImageUrl) {
+    onlineOrderTrashOldManagedQris_(oldQrisImageUrl, qrisImageUrl);
+  }
+
+  return {
+    ok: true,
+    status: 'success',
+    message: qrisImageUploaded
+      ? 'Pengaturan tersimpan dan gambar QRIS berhasil diunggah ke Google Drive.'
+      : 'Pengaturan Online Order outlet berhasil disimpan.',
+    qrisImageUrl: qrisImageUrl,
+    qrisImageUploaded: qrisImageUploaded
+  };
+}
+
+/** Folder penyimpanan gambar QRIS per outlet, di dalam Drive pemilik GAS POS. */
+function onlineOrderQrisDriveFolder_() {
+  const props = PropertiesService.getScriptProperties();
+  const key = 'ONLINE_ORDER_QRIS_FOLDER_ID';
+  const folderId = props.getProperty(key);
+  if (folderId) {
+    try { return DriveApp.getFolderById(folderId); }
+    catch (err) { props.deleteProperty(key); }
+  }
+  const folder = DriveApp.createFolder('AE POS - QRIS Outlet Online Order');
+  props.setProperty(key, folder.getId());
+  return folder;
+}
+
+
+/** Menghapus versi QRIS lama hanya jika file berada di folder QRIS modul ini. */
+function onlineOrderTrashOldManagedQris_(oldUrl, newUrl) {
+  try {
+    const oldMatch = String(oldUrl || '').match(/[?&]id=([A-Za-z0-9_-]+)/) ||
+      String(oldUrl || '').match(/\/d\/([A-Za-z0-9_-]+)/);
+    const newMatch = String(newUrl || '').match(/[?&]id=([A-Za-z0-9_-]+)/) ||
+      String(newUrl || '').match(/\/d\/([A-Za-z0-9_-]+)/);
+    if (!oldMatch || (newMatch && oldMatch[1] === newMatch[1])) return;
+    const folderId = onlineOrderQrisDriveFolder_().getId();
+    const file = DriveApp.getFileById(oldMatch[1]);
+    const parents = file.getParents();
+    let belongsToQrisFolder = false;
+    while (parents.hasNext()) {
+      if (parents.next().getId() === folderId) { belongsToQrisFolder = true; break; }
+    }
+    if (belongsToQrisFolder) file.setTrashed(true);
+  } catch (err) {
+    console.warn('QRIS lama tidak dapat dipindahkan ke Sampah: ' + String(err.message || err));
+  }
+}
+
+/** Upload gambar QRIS dari POS; file dibuat dapat dilihat oleh siapa pun yang memiliki link. */
+function onlineOrderSaveQrisImage_(dataUrl, originalName, username) {
+  const raw = String(dataUrl || '');
+  const match = raw.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/i);
+  if (!match) throw new Error('File QRIS harus berupa gambar JPG, PNG, atau WEBP.');
+  const mimeType = match[1].toLowerCase();
+  const bytes = Utilities.base64Decode(match[2]);
+  const maxBytes = 3 * 1024 * 1024;
+  if (!bytes || !bytes.length) throw new Error('File gambar QRIS kosong.');
+  if (bytes.length > maxBytes) throw new Error('Ukuran gambar QRIS maksimal 3 MB.');
+  const extension = mimeType === 'image/png' ? 'png' : (mimeType === 'image/webp' ? 'webp' : 'jpg');
+  const safeUser = String(username || 'OUTLET').replace(/[^A-Za-z0-9_-]/g, '_');
+  const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd_HHmmss');
+  const name = 'QRIS-' + safeUser + '-' + timestamp + '.' + extension;
+  const blob = Utilities.newBlob(bytes, mimeType, name);
+  const file = onlineOrderQrisDriveFolder_().createFile(blob);
+  try {
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  } catch (shareError) {
+    try { file.setTrashed(true); } catch (ignore) {}
+    throw new Error('Gambar terunggah, tetapi Drive tidak mengizinkan akses publik melalui link. Periksa kebijakan berbagi Google Drive: ' + String(shareError.message || shareError));
+  }
+  const fileId = file.getId();
+  return {
+    id: fileId,
+    name: name,
+    url: 'https://drive.google.com/uc?export=view&id=' + encodeURIComponent(fileId)
+  };
+}
+
+function onlineOrderDriveFolder_() {
+  const props = PropertiesService.getScriptProperties();
+  const key = 'ONLINE_ORDER_PROOF_FOLDER_ID';
+  const folderId = props.getProperty(key);
+  if (folderId) return DriveApp.getFolderById(folderId);
+  const folder = DriveApp.createFolder('AE POS - Bukti Pembayaran Online Order');
+  props.setProperty(key, folder.getId());
+  return folder;
+}
+
+function onlineOrderSaveProof_(proof, orderId) {
+  if (!proof || !proof.data) throw new Error('Bukti pembayaran QRIS wajib diunggah.');
+  const raw = String(proof.data);
+  const match = raw.match(/^data:(image\/(?:jpeg|png|webp));base64,([\s\S]+)$/i);
+  if (!match) throw new Error('Format bukti pembayaran harus JPG, PNG, atau WEBP.');
+  const mimeType = match[1].toLowerCase();
+  const bytes = Utilities.base64Decode(match[2]);
+  if (!bytes || !bytes.length) throw new Error('File bukti pembayaran kosong.');
+  if (bytes.length > ONLINE_ORDER_MAX_PROOF_BYTES_) throw new Error('Bukti pembayaran maksimal 5 MB.');
+  const extension = mimeType === 'image/png' ? 'png' : (mimeType === 'image/webp' ? 'webp' : 'jpg');
+  const blob = Utilities.newBlob(bytes, mimeType, orderId + '-bukti-qris.' + extension);
+  const file = onlineOrderDriveFolder_().createFile(blob);
+  // File tetap private di Drive; akses diberikan melalui permission akun Drive pemilik.
+  return { id: file.getId(), url: file.getUrl() };
+}
+
+/**
+ * Penerimaan order publik. Harga, brand, nama produk dan total dihitung ulang di server
+ * berdasarkan Products POS, bukan mempercayai harga dari browser.
+ */
+function submitOnlineOrder_(data) {
+  data = data || {};
+  let proofFile = null;
+  try {
+    const outletCode = String(data.outlet || data.outletCode || '').trim();
+    const customer = String(data.customer || data.customerName || '').trim();
+    const phone = String(data.phone || '').replace(/[^\d+]/g, '').trim();
+    const orderType = String(data.orderType || '').trim().toUpperCase();
+    const payment = String(data.payment || data.paymentMethod || '').trim().toUpperCase();
+    const address = String(data.address || '').trim();
+    if (!outletCode || !customer || !phone || !orderType || !payment) {
+      throw new Error('Outlet, nama pelanggan, WhatsApp, jenis order, dan pembayaran wajib diisi.');
+    }
+    if (!/^\+?\d{8,15}$/.test(phone)) throw new Error('Nomor WhatsApp tidak valid.');
+    const cfg = onlineOrderResolveOutlet_(outletCode);
+    if (!cfg[orderType.toLowerCase()]) throw new Error('Jenis order tidak diaktifkan oleh outlet.');
+    if (!cfg[payment.toLowerCase()]) throw new Error('Metode pembayaran tidak diaktifkan oleh outlet.');
+    if (payment === 'QRIS' && !cfg.qrisImageUrl) throw new Error('QRIS belum dikonfigurasi. Outlet harus mengisi QRIS Image URL terlebih dahulu.');
+    if (orderType === 'DELIVERY' && !address) throw new Error('Alamat pengantaran wajib diisi.');
+
+    const incomingItems = Array.isArray(data.items) ? data.items : [];
+    if (!incomingItems.length) throw new Error('Keranjang pesanan kosong.');
+    if (incomingItems.length > 60) throw new Error('Maksimal 60 jenis menu per pesanan.');
+
+    const products = getProductsFromSheet().filter(function(p) {
+      const b = String(p.brand || '').trim().toUpperCase();
+      return !b || b === cfg.brand;
+    });
+    const productMap = {};
+    products.forEach(function(p){ productMap[String(p.id)] = p; });
+
+    let subtotal = 0;
+    const savedItems = incomingItems.map(function(item) {
+      const id = String(item.productId != null ? item.productId : item.id || '');
+      const p = productMap[id];
+      const qty = Math.floor(Number(item.qty || item.quantity || 0));
+      if (!p) throw new Error('Menu tidak ditemukan/ tidak tersedia untuk outlet: ' + id);
+      if (!Number.isFinite(qty) || qty < 1 || qty > 99) throw new Error('Jumlah menu harus 1–99.');
+      const unitPrice = Math.max(0, Number(p.price) || 0);
+      const lineTotal = unitPrice * qty;
+      subtotal += lineTotal;
+      return [null, String(p.id), p.name, p.category || p.kategori || 'Menu', qty, unitPrice, lineTotal, p.sku || ''];
+    });
+    const deliveryFee = orderType === 'DELIVERY' ? cfg.deliveryFee : 0;
+    const total = subtotal + deliveryFee;
+    const orderId = 'ON-' + Utilities.formatDate(new Date(), 'Asia/Jakarta', 'yyyyMMdd-HHmmss') +
+      '-' + Utilities.getUuid().replace(/-/g, '').slice(0, 12).toUpperCase();
+
+    if (payment === 'QRIS') proofFile = onlineOrderSaveProof_(data.proof, orderId);
+
+    const orders = sheet_('OnlineOrders', ONLINE_ORDER_HEADERS_.orders);
+    const itemsSheet = sheet_('OnlineOrderItems', ONLINE_ORDER_HEADERS_.items);
+    const paymentStatus = payment === 'QRIS' ? 'WAITING_VERIFICATION' :
+      (payment === 'TRANSFER' ? 'WAITING_PAYMENT' : 'UNPAID');
+    orders.appendRow([
+      orderId, new Date(), cfg.outletCode, cfg.posUsername, cfg.outletName, cfg.brand,
+      customer, phone, orderType, address, payment, paymentStatus,
+      proofFile ? proofFile.id : '', proofFile ? proofFile.url : '',
+      String(data.notes || ''), subtotal, deliveryFee, total, 'NEW', 'ONLINE_ORDER',
+      JSON.stringify([{status:'NEW',at:new Date().toISOString(),by:'Pelanggan Online'}]),
+      JSON.stringify([{status:paymentStatus,at:new Date().toISOString(),by:'Sistem POS'}])
+    ]);
+    const rowsToSave = savedItems.map(function(r){ r[0] = orderId; return r; });
+    if (rowsToSave.length) {
+      itemsSheet.getRange(itemsSheet.getLastRow() + 1, 1, rowsToSave.length, ONLINE_ORDER_HEADERS_.items.length)
+        .setValues(rowsToSave);
+    }
+
+    return {
+      ok: true, status: 'success', orderId: orderId,
+      subtotal: subtotal, deliveryFee: deliveryFee, total: total,
+      paymentStatus: paymentStatus,
+      message: 'Pesanan berhasil diterima.'
+    };
+  } catch (err) {
+    // Jika bukti sempat dibuat tetapi penyimpanan gagal, jangan biarkan file yatim tanpa order.
+    if (proofFile && proofFile.id) {
+      try { DriveApp.getFileById(proofFile.id).setTrashed(true); } catch (ignore) {}
+    }
+    throw err;
+  }
+}
+
+
+
+function parseOnlineOrderHistory_(raw, fallback) {
+  try {
+    const parsed = JSON.parse(String(raw || '[]'));
+    if (Array.isArray(parsed) && parsed.length) return parsed;
+  } catch (ignore) {}
+  return fallback ? [fallback] : [];
+}
+
+/**
+ * Public order tracking by Order ID only.
+ * Returns limited tracking fields; never returns address, notes, payment proof URL,
+ * customer name, or customer phone. Treat Order ID as a private lookup reference.
+ */
+function getOnlineOrderPublicStatus_(orderId) {
+  orderId = String(orderId || '').trim().toUpperCase();
+  if (!orderId) throw new Error('Nomor pesanan wajib dikirim.');
+  if (!/^ON-\d{8}-\d{6}-[A-F0-9]{6,12}$/i.test(orderId)) throw new Error('Format Order ID tidak valid.');
+  const sh = sheet_('OnlineOrders', ONLINE_ORDER_HEADERS_.orders);
+  if (!sh || sh.getLastRow() < 2) throw new Error('Pesanan tidak ditemukan.');
+  const found = sh.getRange(2, 1, sh.getLastRow() - 1, 1)
+    .createTextFinder(orderId).matchEntireCell(true).findNext();
+  if (!found) throw new Error('Pesanan tidak ditemukan. Periksa Order ID.');
+  const row = sh.getRange(found.getRow(), 1, 1, ONLINE_ORDER_HEADERS_.orders.length).getValues()[0];
+  return {
+    status: 'success',
+    orderId: String(row[0] || ''),
+    outletName: String(row[4] || ''),
+    orderType: String(row[8] || ''),
+    paymentMethod: String(row[10] || ''),
+    paymentStatus: String(row[11] || ''),
+    orderStatus: String(row[18] || 'NEW'),
+    total: Number(row[17] || 0),
+    createdAt: row[1] instanceof Date ? row[1].toISOString() : String(row[1] || ''),
+    statusHistory: parseOnlineOrderHistory_(row[20], {status:String(row[18] || 'NEW'),at:row[1],by:'POS'}),
+    paymentHistory: parseOnlineOrderHistory_(row[21], {status:String(row[11] || ''),at:row[1],by:'POS'})
+  };
+}
+
+/**
+ * POS INBOX: hanya mengembalikan order milik username POS yang sesi akunnya masih aktif.
+ * Read dilakukan melalui POST agar identitas akun tidak dimasukkan ke URL browser.
+ */
+function getOnlineOrderInbox_(request) {
+  request = request || {};
+  const username = String(request.username || request.posUsername || '').trim();
+  if (!username) throw new Error('Username POS wajib dikirim.');
+  const session = verifyPosSession_(username);
+  if (!session || session.status !== 'success') throw new Error('Sesi POS tidak valid atau akun sudah nonaktif.');
+
+  const ordersSheet = SS.getSheetByName('OnlineOrders');
+  if (!ordersSheet || ordersSheet.getLastRow() < 2) {
+    return { status: 'success', orders: [], pendingCount: 0, message: 'Belum ada pesanan online.' };
+  }
+  const orderRows = ordersSheet.getDataRange().getValues();
+  const wanted = username.toLowerCase();
+  const itemMap = {};
+  const itemsSheet = SS.getSheetByName('OnlineOrderItems');
+  if (itemsSheet && itemsSheet.getLastRow() > 1) {
+    const itemRows = itemsSheet.getDataRange().getValues();
+    for (let i = 1; i < itemRows.length; i++) {
+      const r = itemRows[i];
+      const key = String(r[0] || '');
+      if (!key) continue;
+      if (!itemMap[key]) itemMap[key] = [];
+      itemMap[key].push({
+        productId: String(r[1] || ''), name: String(r[2] || ''),
+        category: String(r[3] || ''), qty: Number(r[4]) || 0,
+        unitPrice: Number(r[5]) || 0, lineTotal: Number(r[6]) || 0,
+        sku: String(r[7] || '')
+      });
+    }
+  }
+
+  const filterStatus = String(request.statusFilter || 'ALL').trim().toUpperCase();
+  const limit = Math.max(1, Math.min(100, Number(request.limit) || 60));
+  const orders = [];
+  for (let i = 1; i < orderRows.length; i++) {
+    const r = orderRows[i];
+    if (String(r[3] || '').trim().toLowerCase() !== wanted) continue;
+    const orderStatus = String(r[18] || 'NEW').trim().toUpperCase();
+    if (filterStatus !== 'ALL' && orderStatus !== filterStatus) continue;
+    orders.push({
+      orderId: String(r[0] || ''), createdAt: r[1] instanceof Date ? r[1].toISOString() : String(r[1] || ''),
+      outletCode: String(r[2] || ''), posUsername: String(r[3] || ''),
+      outletName: String(r[4] || ''), brand: String(r[5] || ''),
+      customer: String(r[6] || ''), phone: String(r[7] || ''),
+      orderType: String(r[8] || ''), address: String(r[9] || ''),
+      paymentMethod: String(r[10] || ''), paymentStatus: String(r[11] || ''),
+      proofFileId: String(r[12] || ''), proofUrl: String(r[13] || ''),
+      notes: String(r[14] || ''), subtotal: Number(r[15]) || 0,
+      deliveryFee: Number(r[16]) || 0, total: Number(r[17]) || 0,
+      orderStatus: orderStatus, source: String(r[19] || 'ONLINE_ORDER'),
+      items: itemMap[String(r[0] || '')] || []
+    });
+  }
+  orders.sort(function(a,b){ return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(); });
+  const allForOutlet = orderRows.slice(1).filter(function(r){ return String(r[3] || '').trim().toLowerCase() === wanted; });
+  const pendingCount = allForOutlet.filter(function(r){
+    const s = String(r[18] || 'NEW').trim().toUpperCase();
+    return s === 'NEW';
+  }).length;
+  return { status: 'success', orders: orders.slice(0, limit), pendingCount: pendingCount, totalCount: allForOutlet.length };
+}
+
+/** Perubahan status order hanya boleh dilakukan oleh akun POS outlet yang memiliki order tersebut. */
+function updateOnlineOrderStatus_(request) {
+  request = request || {};
+  const username = String(request.username || request.posUsername || '').trim();
+  const orderId = String(request.orderId || '').trim();
+  const nextStatus = String(request.orderStatus || '').trim().toUpperCase();
+  if (!username || !orderId) throw new Error('Username POS dan Order ID wajib dikirim.');
+  const session = verifyPosSession_(username);
+  if (!session || session.status !== 'success') throw new Error('Sesi POS tidak valid atau akun sudah nonaktif.');
+  const allowed = ['ACCEPTED','PREPARING','READY','COMPLETED','REJECTED','CANCELLED'];
+  if (allowed.indexOf(nextStatus) < 0) throw new Error('Status pesanan tidak dikenal.');
+  const sh = sheet_('OnlineOrders', ONLINE_ORDER_HEADERS_.orders);
+  const last = sh.getLastRow();
+  if (last < 2) throw new Error('Pesanan tidak ditemukan.');
+  const found = sh.getRange(2, 1, last - 1, 1).createTextFinder(orderId).matchEntireCell(true).findNext();
+  if (!found) throw new Error('Pesanan tidak ditemukan.');
+  const rowNo = found.getRow();
+  const row = sh.getRange(rowNo, 1, 1, ONLINE_ORDER_HEADERS_.orders.length).getValues()[0];
+  if (String(row[3] || '').trim().toLowerCase() !== username.toLowerCase()) throw new Error('Anda tidak memiliki akses ke pesanan outlet ini.');
+  const current = String(row[18] || 'NEW').trim().toUpperCase();
+  const transitions = {
+    NEW: ['ACCEPTED','REJECTED','CANCELLED'],
+    ACCEPTED: ['PREPARING','REJECTED','CANCELLED'],
+    PREPARING: ['READY','CANCELLED'],
+    READY: ['COMPLETED','CANCELLED'],
+    COMPLETED: [], REJECTED: [], CANCELLED: []
+  };
+  if (current !== nextStatus && (transitions[current] || []).indexOf(nextStatus) < 0) {
+    throw new Error('Perubahan status tidak sesuai alur. Status saat ini: ' + current);
+  }
+  sh.getRange(rowNo, 19).setValue(nextStatus);
+  const history = parseOnlineOrderHistory_(row[20], {status:current,at:row[1],by:'Sistem POS'});
+  history.push({status:nextStatus,at:new Date().toISOString(),by:username});
+  sh.getRange(rowNo, 21).setValue(JSON.stringify(history));
+  return { status: 'success', orderId: orderId, orderStatus: nextStatus, message: 'Status pesanan diperbarui.' };
+}
+
+/** Verifikasi pembayaran manual oleh kasir setelah bukti/transfer diperiksa. */
+function updateOnlineOrderPayment_(request) {
+  request = request || {};
+  const username = String(request.username || request.posUsername || '').trim();
+  const orderId = String(request.orderId || '').trim();
+  const nextPayment = String(request.paymentStatus || '').trim().toUpperCase();
+  if (!username || !orderId) throw new Error('Username POS dan Order ID wajib dikirim.');
+  const session = verifyPosSession_(username);
+  if (!session || session.status !== 'success') throw new Error('Sesi POS tidak valid atau akun sudah nonaktif.');
+  if (['PAID','REJECTED'].indexOf(nextPayment) < 0) throw new Error('Status pembayaran tidak dikenal.');
+  const sh = sheet_('OnlineOrders', ONLINE_ORDER_HEADERS_.orders);
+  const last = sh.getLastRow();
+  if (last < 2) throw new Error('Pesanan tidak ditemukan.');
+  const found = sh.getRange(2, 1, last - 1, 1).createTextFinder(orderId).matchEntireCell(true).findNext();
+  if (!found) throw new Error('Pesanan tidak ditemukan.');
+  const rowNo = found.getRow();
+  const row = sh.getRange(rowNo, 1, 1, ONLINE_ORDER_HEADERS_.orders.length).getValues()[0];
+  if (String(row[3] || '').trim().toLowerCase() !== username.toLowerCase()) throw new Error('Anda tidak memiliki akses ke pembayaran pesanan outlet ini.');
+  const method = String(row[10] || '').trim().toUpperCase();
+  if (nextPayment === 'PAID' && method === 'QRIS' && !String(row[12] || '').trim()) {
+    throw new Error('Bukti pembayaran QRIS tidak ditemukan. Pembayaran tidak dapat diverifikasi.');
+  }
+  if (String(row[11] || '').trim().toUpperCase() === 'REJECTED' && nextPayment === 'PAID') {
+    throw new Error('Pembayaran yang sudah ditolak tidak dapat diubah menjadi lunas dari aksi ini.');
+  }
+  sh.getRange(rowNo, 12).setValue(nextPayment);
+  const history = parseOnlineOrderHistory_(row[21], {status:String(row[11] || ''),at:row[1],by:'Sistem POS'});
+  history.push({status:nextPayment,at:new Date().toISOString(),by:username});
+  sh.getRange(rowNo, 22).setValue(JSON.stringify(history));
+  return { status: 'success', orderId: orderId, paymentStatus: nextPayment, message: nextPayment === 'PAID' ? 'Pembayaran ditandai lunas.' : 'Pembayaran ditolak.' };
+}
