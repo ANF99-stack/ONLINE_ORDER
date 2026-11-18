@@ -6,6 +6,7 @@
 <meta name="theme-color" content="#5547e8">
 <meta name="description" content="Pesan menu favorit dari outlet AE POS dengan mudah.">
 <title>Online Order | AE POS</title>
+<!-- Tracking diagnostic V8: tampilkan pesan error asli dari endpoint POS -->
 <style>
 :root{
   --brand:#5547e8;--brand-dark:#4034c9;--brand-soft:#efedff;
@@ -296,12 +297,19 @@ async function refreshOrderTracking(){
   trackingInFlight=true;
   try{
     const url=new URL(apiBase,location.href);url.searchParams.set('action','getOnlineOrderStatus');url.searchParams.set('orderId',trackedOrder.orderId);url.searchParams.set('phone',trackedOrder.phone);
-    const res=await fetch(url.toString(),{method:'GET',cache:'no-store'});if(!res.ok)throw new Error('HTTP '+res.status);
-    const data=await res.json();if(data.status!=='success')throw new Error(data.message||'Status belum dapat dimuat.');
+    const res=await fetch(url.toString(),{method:'GET',cache:'no-store'});
+    if(!res.ok)throw new Error('HTTP '+res.status+' dari Web App POS');
+    const raw=await res.text();
+    let data;
+    try{data=JSON.parse(raw);}catch(parseErr){throw new Error('Respons GAS bukan JSON. Periksa URL deployment dan akses Web App.');}
+    if(!data||data.status!=='success')throw new Error((data&&data.message)||'Backend tidak mengembalikan status success.');
     renderTracking(data);$('lookupNotice').classList.add('hidden');
   }catch(err){
-    $('trackingCard').classList.remove('hidden');$('trackingConnection').textContent='● MENCOBA ULANG';$('trackingConnection').className='tracking-live offline';
-    $('trackingStatus').textContent='Koneksi ke POS terputus sementara';$('trackingUpdated').textContent='Sistem akan mencoba kembali otomatis.';
+    const detail=String(err&&err.message||err||'Kesalahan tidak diketahui');
+    console.error('Online Order tracking error:',err);
+    $('trackingCard').classList.remove('hidden');$('trackingConnection').textContent='● GAGAL MEMUAT';$('trackingConnection').className='tracking-live offline';
+    $('trackingStatus').textContent=detail;
+    $('trackingUpdated').textContent='Akan mencoba lagi otomatis • '+new Date().toLocaleTimeString('id-ID');
   }finally{trackingInFlight=false;}
 }
 function startOrderTracking(orderId,phone){
