@@ -93,6 +93,14 @@ textarea{resize:vertical;min-height:72px}
 .secondary-btn{border:1px solid #e1e5ef;background:#fff;color:#59647a;border-radius:11px;padding:10px 12px;font-size:11px;font-weight:800;cursor:pointer}
 @media(max-width:480px){.tracking-steps{gap:3px}.tracking-step b{font-size:8px}.tracking-hero{padding:15px}.tracking-order-no{font-size:14px}.tracking-search{grid-template-columns:1fr}}
 
+
+.order-history-list{display:grid;gap:9px}
+.order-history-item{border:1px solid #e7eaf2;background:#fff;border-radius:14px;padding:12px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.order-history-info{min-width:0}.order-history-info strong{display:block;font-size:12px;overflow-wrap:anywhere}.order-history-info small{display:block;color:#8993a5;font-size:10px;margin-top:4px}
+.order-history-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}.history-track{border:0;background:#5547e8;color:#fff;border-radius:10px;padding:9px 11px;font-size:10px;font-weight:850;cursor:pointer}.history-remove{border:1px solid #e5e8ef;background:#fff;color:#8a94a7;border-radius:10px;padding:8px;font-size:10px;cursor:pointer}
+.manual-track{margin-top:14px;border-top:1px solid #edf0f5;padding-top:12px}.manual-track summary{cursor:pointer;color:#6e7890;font-size:11px;font-weight:800}
+@media(max-width:480px){.order-history-item{align-items:flex-start}.order-history-actions{flex-direction:column}.history-track{width:100%}}
+
 </style>
 </head>
 <body>
@@ -133,11 +141,16 @@ textarea{resize:vertical;min-height:72px}
   <section class="card" id="trackingLookupCard">
     <h2>🔎 Lacak Pesanan</h2>
     <p class="section-sub">Masukkan nomor pesanan dan WhatsApp yang digunakan saat checkout untuk melihat perkembangan pesanan dari POS.</p>
-    <div class="tracking-search">
-      <div class="field"><label for="lookupOrderId">Nomor pesanan</label><input id="lookupOrderId" placeholder="ON-20261118-..." autocomplete="off"></div>
-      <div class="field"><label for="lookupPhone">Nomor WhatsApp</label><input id="lookupPhone" type="tel" inputmode="tel" placeholder="08xxxxxxxxxx" autocomplete="tel"></div>
-      <button type="button" class="primary" id="lookupTrackingBtn" onclick="lookupOrderTracking()">Lacak Pesanan Saya</button>
-    </div>
+    <p class="section-sub">Pesanan yang dibuat dari perangkat dan browser ini akan muncul otomatis di riwayat. Pilih salah satu untuk melihat status terbaru.</p>
+    <div id="orderHistoryList" class="order-history-list"><div class="cart-empty">Belum ada riwayat pesanan di perangkat ini.</div></div>
+    <details class="manual-track">
+      <summary>Lacak dengan nomor pesanan (opsional)</summary>
+      <div class="tracking-search" style="margin-top:12px">
+        <div class="field"><label for="lookupOrderId">Nomor pesanan</label><input id="lookupOrderId" placeholder="ON-20261118-..." autocomplete="off"></div>
+        <div class="field"><label for="lookupPhone">Nomor WhatsApp</label><input id="lookupPhone" type="tel" inputmode="tel" placeholder="08xxxxxxxxxx" autocomplete="tel"></div>
+        <button type="button" class="primary" id="lookupTrackingBtn" onclick="lookupOrderTracking()">Lacak Pesanan</button>
+      </div>
+    </details>
     <div class="notice hidden" id="lookupNotice" aria-live="polite"></div>
   </section>
   <section class="card tracking-card hidden" id="trackingCard" aria-live="polite">
@@ -229,12 +242,19 @@ function toggleAddress(){$('addressField').classList.toggle('hidden',$('orderTyp
 function toggleQrisProof(){const q=$('payment').value==='QRIS';$('qrisPaymentArea').classList.toggle('hidden',!q);if(!q)$('qrisProof').value='';}
 function validateQrisProof(){const file=$('qrisProof').files[0],hint=$('qrisProofHint');if(file&&file.size>5*1024*1024){hint.textContent='File terlalu besar. Maksimum 5 MB.';hint.style.color='#dc2626';$('qrisProof').value='';return false;}if(file&&!['image/jpeg','image/png','image/webp'].includes(file.type)){hint.textContent='Format file harus JPG, PNG, atau WEBP.';hint.style.color='#dc2626';$('qrisProof').value='';return false;}hint.textContent=file?'File dipilih: '+file.name:'JPG, PNG, atau WEBP. Maksimum 5 MB.';hint.style.color=file?'#16a34a':'var(--muted)';return !!file;}
 function fileAsDataUrl(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error('Gagal membaca file bukti pembayaran.'));reader.readAsDataURL(file);});}
+const ORDER_HISTORY_KEY='ae_pos_online_order_history_v1';
+function readOrderHistory(){try{const all=JSON.parse(localStorage.getItem(ORDER_HISTORY_KEY)||'{}');return Array.isArray(all[outletParam])?all[outletParam]:[];}catch(e){return [];}}
+function writeOrderHistory(items){try{const all=JSON.parse(localStorage.getItem(ORDER_HISTORY_KEY)||'{}');all[outletParam]=items.slice(0,20);localStorage.setItem(ORDER_HISTORY_KEY,JSON.stringify(all));}catch(e){$('lookupNotice').textContent='Riwayat tidak dapat disimpan pada browser ini. Aktifkan penyimpanan situs agar riwayat tersedia.';$('lookupNotice').className='notice error';}}
+function saveOrderToHistory(orderId,phone){const items=readOrderHistory().filter(x=>x.orderId!==String(orderId));items.unshift({orderId:String(orderId),phone:String(phone).replace(/[^\d+]/g,''),createdAt:new Date().toISOString()});writeOrderHistory(items);renderOrderHistory();}
+function renderOrderHistory(){const items=readOrderHistory();const box=$('orderHistoryList');if(!box)return;if(!items.length){box.innerHTML='<div class="cart-empty">Belum ada riwayat pesanan di perangkat ini. Pesanan baru akan otomatis tersimpan di sini.</div>';return;}box.innerHTML=items.map((item,i)=>`<div class="order-history-item"><div class="order-history-info"><strong>${escapeHtml(item.orderId)}</strong><small>${escapeHtml(fmtTrackingTime(item.createdAt))} • Nomor WhatsApp tersimpan di perangkat</small></div><div class="order-history-actions"><button class="history-track" type="button" data-history-track="${i}">Lihat status</button><button class="history-remove" type="button" title="Hapus dari riwayat" data-history-remove="${i}">×</button></div></div>`).join('');}
+function openHistoryOrder(index){const item=readOrderHistory()[Number(index)];if(!item)return;startOrderTracking(item.orderId,item.phone);$('trackingCard').scrollIntoView({behavior:'smooth',block:'center'});}
+function removeHistoryOrder(index){const items=readOrderHistory();items.splice(Number(index),1);writeOrderHistory(items);renderOrderHistory();}
 async function submitOrder(){if(isSubmitting)return;const customer=$('customer').value.trim(),phone=$('phone').value.trim(),orderType=$('orderType').value,payment=$('payment').value,address=$('address').value.trim(),notes=$('notes').value.trim();const ids=Object.keys(cart);if(!isReady||!outletParam||!apiBase){alert('Form belum terhubung ke backend POS.');return;}if(!customer||!phone||!orderType||!payment||!ids.length){alert('Mohon lengkapi nama, WhatsApp, jenis pesanan, pembayaran, dan keranjang.');return;}if(!/^\+?[0-9\s-]{8,18}$/.test(phone)){alert('Nomor WhatsApp tidak valid.');return;}if(orderType==='DELIVERY'&&!address){alert('Alamat delivery wajib diisi.');return;}if(payment==='QRIS'&&!validateQrisProof()){alert('Bukti pembayaran QRIS wajib diunggah.');return;}if(payment==='QRIS'&&!qrisImageUrl){alert('QRIS outlet belum dikonfigurasi. Silakan pilih pembayaran lain atau hubungi outlet.');return;}
   isSubmitting=true;$('submit').disabled=true;$('submit').textContent='Mengirim pesanan…';
   try{let proof=null;if(payment==='QRIS'){const f=$('qrisProof').files[0];proof={data:await fileAsDataUrl(f),mimeType:f.type,name:f.name};}const payload={action:'submitOnlineOrder',outlet:outletParam,customer:customer,phone:phone,orderType:orderType,payment:payment,address:address,notes:notes,items:ids.map(id=>({productId:id,qty:cart[id]})),proof:proof};
     // text/plain menghindari preflight OPTIONS saat form publik memanggil Apps Script.
     const response=await fetch(apiBase,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)});if(!response.ok)throw new Error('Backend merespons HTTP '+response.status);const data=await response.json();if(data.status!=='success'&&data.ok!==true)throw new Error(data.message||'Pesanan gagal disimpan.');
-    const statusLabel=payment==='QRIS'?'Menunggu verifikasi pembayaran':payment==='TRANSFER'?'Menunggu pembayaran':'Menunggu diproses';$('result').innerHTML=`<div style="background:#f8fafc;border-radius:12px;padding:14px;font-size:13px;line-height:1.8"><b>Order ID:</b> ${escapeHtml(data.orderId)}<br><b>Outlet:</b> ${escapeHtml($('outlet').value)}<br><b>Nama:</b> ${escapeHtml(customer)}<br><b>WhatsApp:</b> ${escapeHtml(phone)}<br><b>Jenis pesanan:</b> ${escapeHtml(orderType)}<br><b>Subtotal:</b> ${rupiah(data.subtotal)}<br><b>Biaya delivery:</b> ${rupiah(data.deliveryFee)}<br><b>Total:</b> <strong>${rupiah(data.total)}</strong><br><b>Pembayaran:</b> ${escapeHtml(payment)}<br><b>Status:</b> ${escapeHtml(statusLabel)}</div><p style="font-size:12px;color:#64748b">Pesanan sudah tersimpan pada sistem Online Order AE POS.</p>`;$('modal').classList.remove('hidden');startOrderTracking(data.orderId,phone);cart={};renderCart();$('customer').value='';$('phone').value='';$('address').value='';$('notes').value='';$('orderType').value='';$('payment').value='';$('qrisProof').value='';$('qrisPaymentArea').classList.add('hidden');$('addressField').classList.add('hidden');
+    const statusLabel=payment==='QRIS'?'Menunggu verifikasi pembayaran':payment==='TRANSFER'?'Menunggu pembayaran':'Menunggu diproses';$('result').innerHTML=`<div style="background:#f8fafc;border-radius:12px;padding:14px;font-size:13px;line-height:1.8"><b>Order ID:</b> ${escapeHtml(data.orderId)}<br><b>Outlet:</b> ${escapeHtml($('outlet').value)}<br><b>Nama:</b> ${escapeHtml(customer)}<br><b>WhatsApp:</b> ${escapeHtml(phone)}<br><b>Jenis pesanan:</b> ${escapeHtml(orderType)}<br><b>Subtotal:</b> ${rupiah(data.subtotal)}<br><b>Biaya delivery:</b> ${rupiah(data.deliveryFee)}<br><b>Total:</b> <strong>${rupiah(data.total)}</strong><br><b>Pembayaran:</b> ${escapeHtml(payment)}<br><b>Status:</b> ${escapeHtml(statusLabel)}</div><p style="font-size:12px;color:#64748b">Pesanan sudah tersimpan pada sistem Online Order AE POS.</p>`;$('modal').classList.remove('hidden');saveOrderToHistory(data.orderId,phone);startOrderTracking(data.orderId,phone);cart={};renderCart();$('customer').value='';$('phone').value='';$('address').value='';$('notes').value='';$('orderType').value='';$('payment').value='';$('qrisProof').value='';$('qrisPaymentArea').classList.add('hidden');$('addressField').classList.add('hidden');
   }catch(err){console.error(err);alert('Pesanan gagal dikirim: '+err.message);}finally{isSubmitting=false;$('submit').textContent='Pesan Sekarang';renderCart();}}
 const ORDER_STATUS_LABELS={NEW:'Pesanan diterima outlet',ACCEPTED:'Pesanan dikonfirmasi outlet',PREPARING:'Pesanan sedang disiapkan',READY:'Pesanan siap diambil / diantar',COMPLETED:'Pesanan selesai',REJECTED:'Pesanan ditolak outlet',CANCELLED:'Pesanan dibatalkan'};
 const PAYMENT_STATUS_LABELS={WAITING_VERIFICATION:'Menunggu verifikasi QRIS',WAITING_PAYMENT:'Menunggu pembayaran',UNPAID:'Belum dibayar',PAID:'Pembayaran berhasil',REJECTED:'Pembayaran ditolak'};
@@ -305,6 +325,8 @@ function restoreOrderTracking(){
 }
 function closeModal(){$('modal').classList.add('hidden');$('trackingCard').scrollIntoView({behavior:'smooth',block:'center'});}
 bindDynamicControls();
+$('orderHistoryList').addEventListener('click',event=>{const track=event.target.closest('[data-history-track]');const remove=event.target.closest('[data-history-remove]');if(track)openHistoryOrder(track.dataset.historyTrack);if(remove)removeHistoryOrder(remove.dataset.historyRemove);});
+renderOrderHistory();
 (async function init(){
   if(!outletParam||!apiBase){$('outletStatus').textContent='QR belum lengkap';$('outletStatus').className='badge off';setNotice(!outletParam?'Parameter outlet tidak ditemukan pada QR Code.':'URL API GAS POS belum dipasang pada QR Code.','error');$('menus').innerHTML='<div class="notice error">Form tidak dapat digunakan. Buka melalui QR outlet yang memiliki parameter outlet dan api.</div>';return;}
   try{await loadConfig();await loadMenus();isReady=true;restoreOrderTracking();$('cartNotice').textContent='Menu, layanan, dan pembayaran berhasil dimuat dari backend POS.';renderCart();if(!Object.keys(orderConfig).some(k=>['pickup','dinein','delivery'].includes(k)&&orderConfig[k]))$('cartNotice').textContent='Outlet belum mengaktifkan jenis pesanan.';}
