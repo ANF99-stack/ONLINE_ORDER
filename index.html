@@ -305,7 +305,7 @@ async function refreshOrderTracking(){
   }finally{trackingInFlight=false;}
 }
 function startOrderTracking(orderId,phone){
-  trackedOrder={orderId:String(orderId),phone:String(phone).replace(/[^\\d+]/g,'')};
+  trackedOrder={orderId:String(orderId),phone:String(phone).replace(/[^\d+]/g,'')};
   try{sessionStorage.setItem('ae_online_order_tracking',JSON.stringify(trackedOrder));}catch(e){}
   $('lookupOrderId').value=trackedOrder.orderId;$('lookupPhone').value=phone;
   $('trackingCard').classList.remove('hidden');$('trackingStatus').textContent='Menghubungkan ke status pesanan POS…';
