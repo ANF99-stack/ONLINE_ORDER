@@ -58,6 +58,41 @@ textarea{resize:vertical;min-height:72px}
 @media(max-width:760px){.container{grid-template-columns:1fr;margin:15px auto 30px;gap:0;padding:0 13px}.container main{display:contents}.container main>.card:first-child{order:0}.container main>.card:nth-child(2){order:1}.container aside{order:2}.container main>.card:nth-child(3){order:3}.cart-card{position:static}.menu-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.header-inner{padding:11px 14px}.card{padding:17px;border-radius:19px;margin-bottom:13px}.grid2{grid-template-columns:1fr;gap:0}}
 @media(max-width:480px){.brand h1{font-size:16px}.brand small{font-size:11px}.logo{width:41px;height:41px}.badge{font-size:10px;padding:7px 9px}.menu-grid{grid-template-columns:1fr}.menu-item{padding:14px}.add{min-width:40px;height:40px}.container{padding:0 11px}.card{padding:16px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important}}
+
+/* Modern live order tracking */
+#trackingLookupCard{order:4}#trackingCard{order:5}
+.tracking-card{border:1px solid #dfe4f0;background:linear-gradient(145deg,#fff 0%,#fafaff 100%);overflow:hidden}
+.tracking-hero{background:linear-gradient(120deg,#242b48,#4b43b8);color:#fff;border-radius:18px;padding:18px;margin:0 0 16px}
+.tracking-hero-top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.tracking-eyebrow{font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:#c9c9ff;font-weight:800}
+.tracking-order-no{font-size:16px;font-weight:900;letter-spacing:.3px;margin-top:5px;word-break:break-all}
+.tracking-live{font-size:10px;background:#d7fae8;color:#116342;padding:7px 10px;border-radius:99px;font-weight:900;white-space:nowrap}
+.tracking-live.offline{background:#fff0d5;color:#8a5700}
+.tracking-current{padding:15px;border:1px solid #e8eaf4;background:#fff;border-radius:16px;margin-bottom:14px}
+.tracking-current small{display:block;color:#758198;font-size:11px;font-weight:700;margin-bottom:5px}
+.tracking-current strong{font-size:16px;letter-spacing:-.3px}
+.tracking-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.tracking-chip{font-size:10px;font-weight:800;border-radius:99px;padding:7px 10px;background:#f0efff;color:#4e43c7}
+.tracking-chip.paid{background:#e8f8ef;color:#08794d}.tracking-chip.wait{background:#fff5df;color:#946200}.tracking-chip.rejected{background:#fff0f1;color:#ae2638}
+.tracking-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:17px 0 18px}
+.tracking-step{position:relative;text-align:center;min-width:0}
+.tracking-step .dot{width:30px;height:30px;margin:0 auto 7px;border-radius:50%;display:grid;place-items:center;background:#edf0f6;color:#8993a5;font-size:12px;font-weight:900;border:2px solid #e4e8f0}
+.tracking-step.done .dot{background:#e8f8ef;color:#118457;border-color:#bcebd3}
+.tracking-step.current .dot{background:#5547e8;color:#fff;border-color:#d9d5ff;box-shadow:0 0 0 4px #5547e817}
+.tracking-step b{display:block;font-size:9px;line-height:1.35;color:#667187;overflow-wrap:anywhere}
+.tracking-step.done b,.tracking-step.current b{color:#2c3650}
+.tracking-history{border-top:1px solid #edf0f5;padding-top:14px;margin-top:12px}
+.tracking-history h3{font-size:12px;margin:0 0 10px}
+.tracking-event{display:flex;gap:10px;padding:8px 0}
+.tracking-event .event-mark{width:9px;height:9px;border-radius:50%;background:#5547e8;margin:4px 0 0;flex:0 0 auto;box-shadow:0 0 0 4px #5547e814}
+.tracking-event strong{font-size:11px;display:block}
+.tracking-event small{font-size:10px;color:#8993a5;display:block;margin-top:3px}
+.tracking-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:13px;color:#8a94a7;font-size:10px}
+.tracking-search{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tracking-search .primary{grid-column:1/-1}
+.secondary-btn{border:1px solid #e1e5ef;background:#fff;color:#59647a;border-radius:11px;padding:10px 12px;font-size:11px;font-weight:800;cursor:pointer}
+@media(max-width:480px){.tracking-steps{gap:3px}.tracking-step b{font-size:8px}.tracking-hero{padding:15px}.tracking-order-no{font-size:14px}.tracking-search{grid-template-columns:1fr}}
+
 </style>
 </head>
 <body>
@@ -95,14 +130,31 @@ textarea{resize:vertical;min-height:72px}
       <div class="field" id="qrisProofField"><label for="qrisProof">Bukti pembayaran QRIS * (wajib)</label><input id="qrisProof" type="file" accept="image/jpeg,image/png,image/webp" onchange="validateQrisProof()"><small id="qrisProofHint" style="display:block;color:var(--muted);margin-top:5px">JPG, PNG, atau WEBP. Maksimum 5 MB.</small></div>
     </div>
   </div>
-  <section class="card hidden" id="trackingCard" aria-live="polite">
-    <h2>📦 Lacak Pesanan</h2>
-    <p class="section-sub">Status pesanan diperbarui otomatis setiap 3 detik.</p>
-    <div class="tracking-meta"><span>Nomor pesanan</span><strong id="trackingOrderId">-</strong></div>
-    <div class="tracking-meta"><span>Status pembayaran</span><strong id="trackingPayment">-</strong></div>
-    <div class="tracking-status" id="trackingStatus">Menunggu pembaruan status…</div>
-    <div class="tracking-time" id="trackingUpdated">Memeriksa status pesanan…</div>
-    <button type="button" class="secondary-btn" id="stopTracking" onclick="stopOrderTracking()">Tutup pelacakan</button>
+  <section class="card" id="trackingLookupCard">
+    <h2>🔎 Lacak Pesanan</h2>
+    <p class="section-sub">Masukkan nomor pesanan dan WhatsApp yang digunakan saat checkout untuk melihat perkembangan pesanan dari POS.</p>
+    <div class="tracking-search">
+      <div class="field"><label for="lookupOrderId">Nomor pesanan</label><input id="lookupOrderId" placeholder="ON-20261118-..." autocomplete="off"></div>
+      <div class="field"><label for="lookupPhone">Nomor WhatsApp</label><input id="lookupPhone" type="tel" inputmode="tel" placeholder="08xxxxxxxxxx" autocomplete="tel"></div>
+      <button type="button" class="primary" id="lookupTrackingBtn" onclick="lookupOrderTracking()">Lacak Pesanan Saya</button>
+    </div>
+    <div class="notice hidden" id="lookupNotice" aria-live="polite"></div>
+  </section>
+  <section class="card tracking-card hidden" id="trackingCard" aria-live="polite">
+    <div class="tracking-hero">
+      <div class="tracking-hero-top">
+        <div><div class="tracking-eyebrow">AE POS • LIVE ORDER</div><div class="tracking-order-no" id="trackingOrderId">-</div></div>
+        <span class="tracking-live" id="trackingConnection">● LIVE</span>
+      </div>
+    </div>
+    <div class="tracking-current">
+      <small>STATUS PESANAN TERKINI</small>
+      <strong id="trackingStatus">Menunggu pembaruan status…</strong>
+      <div class="tracking-chips"><span class="tracking-chip" id="trackingPayment">Pembayaran -</span><span class="tracking-chip" id="trackingType">Jenis pesanan -</span></div>
+    </div>
+    <div class="tracking-steps" id="trackingSteps"></div>
+    <div class="tracking-history"><h3>Riwayat dari kasir POS</h3><div id="trackingEvents"><div class="tracking-event"><span class="event-mark"></span><div><strong>Pesanan dikirim ke outlet</strong><small>Menunggu data dari POS…</small></div></div></div></div>
+    <div class="tracking-footer"><span id="trackingUpdated">Memeriksa status…</span><button type="button" class="secondary-btn" onclick="stopOrderTracking()">Tutup pelacakan</button></div>
   </section>
 </main>
 <aside>
@@ -133,7 +185,31 @@ function setNotice(message,type){$('outletNotice').textContent=message;$('outlet
 function buildApiUrl(action){if(!apiBase)throw new Error('URL Web App GAS POS belum dipasang pada QR.');const url=new URL(apiBase,location.href);url.searchParams.set('action',action);if(outletParam)url.searchParams.set('outlet',outletParam);return url.toString();}
 async function apiGet(action){const response=await fetch(buildApiUrl(action),{method:'GET',cache:'no-store'});if(!response.ok)throw new Error('API POS merespons HTTP '+response.status);const data=await response.json();if(data.status==='error'||data.ok===false)throw new Error(data.message||'Permintaan ke backend gagal.');return data;}
 function initOrderConfig(){const types=[['PICKUP','Ambil di outlet (Pickup)','pickup'],['DINEIN','Makan di tempat (Dine In)','dinein'],['DELIVERY','Diantar (Delivery)','delivery']];$('orderType').innerHTML='<option value="">Pilih jenis pesanan</option>'+types.filter(x=>orderConfig[x[2]]).map(x=>`<option value="${x[0]}">${x[1]}</option>`).join('');const payments=[['CASH','Cash','cash'],['QRIS','QRIS','qris'],['TRANSFER','Transfer','transfer']];$('payment').innerHTML='<option value="">Pilih metode pembayaran</option>'+payments.filter(x=>orderConfig[x[2]]).map(x=>`<option value="${x[0]}">${x[1]}</option>`).join('');if(!$('orderType').options.length||$('orderType').options.length===1)$('orderType').innerHTML='<option value="">Tidak ada jenis pesanan aktif</option>';if(!$('payment').options.length||$('payment').options.length===1)$('payment').innerHTML='<option value="">Tidak ada metode pembayaran aktif</option>';}
-async function loadConfig(){const data=await apiGet('getOnlineOrderConfig');orderConfig=data.config||{};qrisImageUrl=data.qrisImageUrl||'';$('outlet').value=data.outletName||outletParam;$('outletStatus').textContent='● Outlet Online';$('outletStatus').className='badge';$('outletNotice').classList.add('hidden');initOrderConfig();if(qrisImageUrl){$('qrisImage').src=qrisImageUrl;$('qrisImage').classList.remove('hidden');$('qrisInstruction').textContent='Scan QRIS berikut, selesaikan pembayaran, lalu unggah bukti pembayaran.';}else{$('qrisInstruction').textContent='QRIS belum diatur oleh outlet. Metode QRIS tidak akan ditampilkan.';}}
+function qrisImageCandidates(raw){
+  const value=String(raw||'').trim();if(!value)return [];
+  try{
+    const u=new URL(value,location.href),host=u.hostname.toLowerCase();
+    if(host==='drive.google.com'||host.endsWith('.drive.google.com')){
+      let id=u.searchParams.get('id')||'';
+      if(!id){const m=u.pathname.match(/\/file\/d\/([^/]+)/);if(m)id=m[1];}
+      if(id)return [
+        'https://drive.google.com/thumbnail?id='+encodeURIComponent(id)+'&sz=w1200',
+        'https://drive.google.com/uc?export=view&id='+encodeURIComponent(id),
+        'https://lh3.googleusercontent.com/d/'+encodeURIComponent(id)
+      ];
+    }
+  }catch(e){}
+  return [value];
+}
+function showQrisImage(raw){
+  const img=$('qrisImage'),candidates=qrisImageCandidates(raw);img.classList.add('hidden');img.onerror=null;
+  if(!candidates.length){$('qrisInstruction').textContent='QRIS belum diatur oleh outlet. Silakan hubungi outlet.';return;}
+  let index=0;
+  img.onload=()=>{img.classList.remove('hidden');$('qrisInstruction').textContent='Scan QRIS berikut, selesaikan pembayaran, lalu unggah bukti pembayaran.';};
+  img.onerror=()=>{index++;if(index<candidates.length){img.src=candidates[index];}else{$('qrisInstruction').textContent='Gambar QRIS gagal dimuat. Outlet perlu memeriksa akses berbagi file QRIS di Google Drive.';img.classList.add('hidden');}};
+  img.src=candidates[index];
+}
+async function loadConfig(){const data=await apiGet('getOnlineOrderConfig');orderConfig=data.config||{};qrisImageUrl=data.qrisImageUrl||'';$('outlet').value=data.outletName||outletParam;$('outletStatus').textContent='● Outlet Online';$('outletStatus').className='badge';$('outletNotice').classList.add('hidden');initOrderConfig();if(qrisImageUrl){showQrisImage(qrisImageUrl);}else{$('qrisInstruction').textContent='QRIS belum diatur oleh outlet. Metode QRIS tidak akan ditampilkan.';}}
 async function loadMenus(){const data=await apiGet('getOnlineOrderProducts');products=(data.products||[]).filter(p=>p.active!==false).map((p,i)=>({id:String(p.id??p.productId??i+1),name:String(p.name??p.nama??''),category:String(p.category??p.kategori??'Menu'),price:Number(p.price??p.harga??0),icon:p.icon||'🍽️'})).filter(p=>p.name&&Number.isFinite(p.price));category='Semua';renderCategories();renderMenus();renderCart();if(!products.length)$('menus').innerHTML='<div class="notice">Belum ada menu untuk brand outlet ini pada sheet Products POS.</div>';}
 function renderCategories(){const cats=['Semua',...new Set(products.map(p=>p.category))];$('categories').innerHTML=cats.map(c=>`<button type="button" class="${c===category?'active':''}" data-category="${escapeHtml(c)}" aria-pressed="${c===category?'true':'false'}">${escapeHtml(c)}</button>`).join('');}
 function selectCategory(c){category=String(c);renderCategories();renderMenus();}
@@ -161,58 +237,71 @@ async function submitOrder(){if(isSubmitting)return;const customer=$('customer')
     const statusLabel=payment==='QRIS'?'Menunggu verifikasi pembayaran':payment==='TRANSFER'?'Menunggu pembayaran':'Menunggu diproses';$('result').innerHTML=`<div style="background:#f8fafc;border-radius:12px;padding:14px;font-size:13px;line-height:1.8"><b>Order ID:</b> ${escapeHtml(data.orderId)}<br><b>Outlet:</b> ${escapeHtml($('outlet').value)}<br><b>Nama:</b> ${escapeHtml(customer)}<br><b>WhatsApp:</b> ${escapeHtml(phone)}<br><b>Jenis pesanan:</b> ${escapeHtml(orderType)}<br><b>Subtotal:</b> ${rupiah(data.subtotal)}<br><b>Biaya delivery:</b> ${rupiah(data.deliveryFee)}<br><b>Total:</b> <strong>${rupiah(data.total)}</strong><br><b>Pembayaran:</b> ${escapeHtml(payment)}<br><b>Status:</b> ${escapeHtml(statusLabel)}</div><p style="font-size:12px;color:#64748b">Pesanan sudah tersimpan pada sistem Online Order AE POS.</p>`;$('modal').classList.remove('hidden');startOrderTracking(data.orderId,phone);cart={};renderCart();$('customer').value='';$('phone').value='';$('address').value='';$('notes').value='';$('orderType').value='';$('payment').value='';$('qrisProof').value='';$('qrisPaymentArea').classList.add('hidden');$('addressField').classList.add('hidden');
   }catch(err){console.error(err);alert('Pesanan gagal dikirim: '+err.message);}finally{isSubmitting=false;$('submit').textContent='Pesan Sekarang';renderCart();}}
 const ORDER_STATUS_LABELS={NEW:'Pesanan diterima outlet',ACCEPTED:'Pesanan dikonfirmasi outlet',PREPARING:'Pesanan sedang disiapkan',READY:'Pesanan siap diambil / diantar',COMPLETED:'Pesanan selesai',REJECTED:'Pesanan ditolak outlet',CANCELLED:'Pesanan dibatalkan'};
-const PAYMENT_STATUS_LABELS={WAITING_VERIFICATION:'Menunggu verifikasi pembayaran',WAITING_PAYMENT:'Menunggu pembayaran',UNPAID:'Belum dibayar',PAID:'Pembayaran berhasil',REJECTED:'Pembayaran ditolak'};
-let trackingTimer=null,trackedOrder=null;
+const PAYMENT_STATUS_LABELS={WAITING_VERIFICATION:'Menunggu verifikasi QRIS',WAITING_PAYMENT:'Menunggu pembayaran',UNPAID:'Belum dibayar',PAID:'Pembayaran berhasil',REJECTED:'Pembayaran ditolak'};
+const ORDER_STEPS=[['NEW','Diterima'],['ACCEPTED','Dikonfirmasi'],['PREPARING','Disiapkan'],['READY','Siap'],['COMPLETED','Selesai']];
+let trackingTimer=null,trackedOrder=null,trackingInFlight=false;
+function fmtTrackingTime(value){if(!value)return 'Waktu belum tersedia';const d=new Date(value);return isNaN(d)?String(value):d.toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});}
+function paymentChipClass(status){status=String(status||'').toUpperCase();return status==='PAID'?'tracking-chip paid':(['REJECTED'].includes(status)?'tracking-chip rejected':'tracking-chip wait');}
 function renderTracking(data){
   $('trackingCard').classList.remove('hidden');
   $('trackingOrderId').textContent=data.orderId||trackedOrder.orderId;
-  $('trackingPayment').textContent=PAYMENT_STATUS_LABELS[data.paymentStatus]||data.paymentStatus||'-';
-  $('trackingStatus').textContent=ORDER_STATUS_LABELS[data.orderStatus]||data.orderStatus||'Status belum tersedia';
-  $('trackingUpdated').textContent='Pembaruan otomatis setiap 3 detik • Terakhir dicek '+new Date().toLocaleTimeString('id-ID');
-  const terminal=['COMPLETED','REJECTED','CANCELLED'].includes(String(data.orderStatus||'').toUpperCase());
-  if(terminal) stopOrderTracking(false);
+  $('trackingPayment').textContent='Bayar: '+(PAYMENT_STATUS_LABELS[data.paymentStatus]||data.paymentStatus||'-');
+  $('trackingPayment').className=paymentChipClass(data.paymentStatus);
+  $('trackingType').textContent='Pesanan: '+({PICKUP:'Pickup',DINEIN:'Dine In',DELIVERY:'Delivery'}[data.orderType]||data.orderType||'-');
+  const status=String(data.orderStatus||'NEW').toUpperCase();
+  $('trackingStatus').textContent=ORDER_STATUS_LABELS[status]||status;
+  const rejected=['REJECTED','CANCELLED'].includes(status);
+  const completed=status==='COMPLETED';
+  $('trackingSteps').innerHTML=ORDER_STEPS.map((step,i)=>{
+    const currentIndex=ORDER_STEPS.findIndex(x=>x[0]===status);
+    const done=currentIndex>=0&&i<currentIndex;
+    const current=step[0]===status;
+    const terminalBad=rejected&&i===Math.max(0,currentIndex);
+    return `<div class="tracking-step ${done?'done':''} ${current?'current':''}"><div class="dot">${terminalBad?'!':done?'✓':i+1}</div><b>${terminalBad?(status==='REJECTED'?'Ditolak':'Batal'):step[1]}</b></div>`;
+  }).join('');
+  const statusEvents=(Array.isArray(data.statusHistory)?data.statusHistory:[]).map(ev=>({...ev,kind:'order'}));
+  const paymentEvents=(Array.isArray(data.paymentHistory)?data.paymentHistory:[]).map(ev=>({...ev,kind:'payment'}));
+  const history=statusEvents.concat(paymentEvents).sort((a,b)=>new Date(a.at||0)-new Date(b.at||0));
+  $('trackingEvents').innerHTML=history.length?history.slice().reverse().map(ev=>{
+    const label=ev.kind==='payment'?'Pembayaran: '+(PAYMENT_STATUS_LABELS[ev.status]||ev.status): (ORDER_STATUS_LABELS[ev.status]||ev.status||'Pembaruan pesanan');
+    return `<div class="tracking-event"><span class="event-mark"></span><div><strong>${escapeHtml(label)}</strong><small>${escapeHtml(fmtTrackingTime(ev.at))}${ev.by?' • '+escapeHtml(ev.by):''}</small></div></div>`;
+  }).join(''):`<div class="tracking-event"><span class="event-mark"></span><div><strong>${escapeHtml(ORDER_STATUS_LABELS[status]||status)}</strong><small>Dibuat ${escapeHtml(fmtTrackingTime(data.createdAt))}</small></div></div>`;
+  $('trackingConnection').textContent='● LIVE';$('trackingConnection').className='tracking-live';
+  $('trackingUpdated').textContent='Sinkron POS • '+new Date().toLocaleTimeString('id-ID');
+  const terminal=['COMPLETED','REJECTED','CANCELLED'].includes(status);
+  if(terminal)stopOrderTracking(false);
 }
 async function refreshOrderTracking(){
-  if(!trackedOrder)return;
+  if(!trackedOrder||trackingInFlight)return;
+  trackingInFlight=true;
   try{
-    const url=new URL(apiBase,location.href);
-    url.searchParams.set('action','getOnlineOrderStatus');
-    url.searchParams.set('orderId',trackedOrder.orderId);
-    url.searchParams.set('phone',trackedOrder.phone);
-    const res=await fetch(url.toString(),{method:'GET',cache:'no-store'});
-    if(!res.ok)throw new Error('HTTP '+res.status);
-    const data=await res.json();
-    if(data.status!=='success')throw new Error(data.message||'Status belum dapat dimuat.');
-    renderTracking(data);
+    const url=new URL(apiBase,location.href);url.searchParams.set('action','getOnlineOrderStatus');url.searchParams.set('orderId',trackedOrder.orderId);url.searchParams.set('phone',trackedOrder.phone);
+    const res=await fetch(url.toString(),{method:'GET',cache:'no-store'});if(!res.ok)throw new Error('HTTP '+res.status);
+    const data=await res.json();if(data.status!=='success')throw new Error(data.message||'Status belum dapat dimuat.');
+    renderTracking(data);$('lookupNotice').classList.add('hidden');
   }catch(err){
-    $('trackingCard').classList.remove('hidden');
-    $('trackingStatus').textContent='Belum dapat memperbarui status. Akan dicoba kembali otomatis.';
-    $('trackingUpdated').textContent='Periksa koneksi internet Anda.';
-  }
+    $('trackingCard').classList.remove('hidden');$('trackingConnection').textContent='● MENCOBA ULANG';$('trackingConnection').className='tracking-live offline';
+    $('trackingStatus').textContent='Koneksi ke POS terputus sementara';$('trackingUpdated').textContent='Sistem akan mencoba kembali otomatis.';
+  }finally{trackingInFlight=false;}
 }
 function startOrderTracking(orderId,phone){
-  trackedOrder={orderId:String(orderId),phone:String(phone).replace(/[^\d+]/g,'')};
+  trackedOrder={orderId:String(orderId),phone:String(phone).replace(/[^\\d+]/g,'')};
   try{sessionStorage.setItem('ae_online_order_tracking',JSON.stringify(trackedOrder));}catch(e){}
-  $('trackingCard').classList.remove('hidden');
-  $('trackingOrderId').textContent=trackedOrder.orderId;
-  $('trackingStatus').textContent='Pesanan berhasil dikirim. Menunggu konfirmasi outlet…';
-  refreshOrderTracking();
-  if(trackingTimer)clearInterval(trackingTimer);
-  trackingTimer=setInterval(refreshOrderTracking,3000);
+  $('lookupOrderId').value=trackedOrder.orderId;$('lookupPhone').value=phone;
+  $('trackingCard').classList.remove('hidden');$('trackingStatus').textContent='Menghubungkan ke status pesanan POS…';
+  refreshOrderTracking();if(trackingTimer)clearInterval(trackingTimer);trackingTimer=setInterval(refreshOrderTracking,3000);
+}
+async function lookupOrderTracking(){
+  const id=$('lookupOrderId').value.trim(),phone=$('lookupPhone').value.trim();
+  if(!id||!phone){$('lookupNotice').textContent='Nomor pesanan dan WhatsApp wajib diisi.';$('lookupNotice').className='notice error';return;}
+  startOrderTracking(id,phone);await refreshOrderTracking();
 }
 function stopOrderTracking(clear=true){
   if(trackingTimer){clearInterval(trackingTimer);trackingTimer=null;}
-  if(clear){
-    trackedOrder=null;
-    try{sessionStorage.removeItem('ae_online_order_tracking');}catch(e){}
-    $('trackingCard').classList.add('hidden');
-  }
+  if(clear){trackedOrder=null;try{sessionStorage.removeItem('ae_online_order_tracking');}catch(e){}$('trackingCard').classList.add('hidden');}
 }
 function restoreOrderTracking(){
-  try{
-    const saved=JSON.parse(sessionStorage.getItem('ae_online_order_tracking')||'null');
-    if(saved&&saved.orderId&&saved.phone)startOrderTracking(saved.orderId,saved.phone);
-  }catch(e){}
+  try{const saved=JSON.parse(sessionStorage.getItem('ae_online_order_tracking')||'null');if(saved&&saved.orderId&&saved.phone)startOrderTracking(saved.orderId,saved.phone);}catch(e){}
 }
 function closeModal(){$('modal').classList.add('hidden');$('trackingCard').scrollIntoView({behavior:'smooth',block:'center'});}
 bindDynamicControls();
