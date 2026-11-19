@@ -406,7 +406,7 @@ renderOrderHistory();
 showPage('menu');
 (async function init(){
   if(!outletParam||!apiBase){$('outletStatus').textContent='QR belum lengkap';$('outletStatus').className='badge off';setNotice(!outletParam?'Parameter outlet tidak ditemukan pada QR Code.':'URL API GAS POS belum dipasang pada QR Code.','error');$('menus').innerHTML='<div class="notice error">Form tidak dapat digunakan. Buka melalui QR outlet yang memiliki parameter outlet dan api.</div>';return;}
-  try{await loadConfig();await loadMenus();isReady=true;restoreOrderTracking();$('cartNotice').textContent='Menu, layanan, dan pembayaran berhasil dimuat dari backend POS.';renderCart();if(!Object.keys(orderConfig).some(k=>['pickup','dinein','delivery'].includes(k)&&orderConfig[k]))$('cartNotice').textContent='Outlet belum mengaktifkan jenis pesanan.';}
+  try{await loadConfig();await loadMenus();isReady=true;restoreOrderTracking();$('cartNotice');renderCart();if(!Object.keys(orderConfig).some(k=>['pickup','dinein','delivery'].includes(k)&&orderConfig[k]))$('cartNotice').textContent='Outlet belum mengaktifkan jenis pesanan.';}
   catch(err){console.error(err);$('outletStatus').textContent='Koneksi gagal';$('outletStatus').className='badge off';setNotice('Gagal memuat konfigurasi outlet: '+err.message,'error');$('menus').innerHTML='<div class="notice error">'+escapeHtml(err.message)+'</div>';}
 })();
 </script>
