@@ -157,9 +157,41 @@ body.checkout-mode .bottom-cart{display:none!important}
 .product-icon{display:none!important}
 .product{gap:0}
 </style>
+
+<style>
+.track-toggle{border:1px solid #d9d5ff;background:#f7f6ff;color:var(--brand);border-radius:11px;padding:9px 12px;font-size:11px;font-weight:850;white-space:nowrap}
+.tracking-card{max-width:1180px;margin:16px auto 0;padding:0 16px}
+.tracking-inner{background:#fff;border:1px solid #e2e7f1;border-radius:18px;padding:18px;box-shadow:var(--shadow)}
+.tracking-form{display:flex;gap:9px}
+.tracking-form input{flex:1;min-width:0}
+.tracking-form button{border:0;border-radius:11px;background:var(--brand);color:#fff;padding:0 18px;font-size:12px;font-weight:850}
+.tracking-result{margin-top:14px}
+.tracking-status{display:inline-block;border-radius:99px;background:#efedff;color:var(--brand);padding:7px 11px;font-size:11px;font-weight:850}
+.tracking-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}
+.tracking-meta div{background:#f8f9fd;border:1px solid var(--line);border-radius:10px;padding:10px;font-size:12px}
+.tracking-meta small{display:block;color:var(--muted);font-size:10px;margin-bottom:4px}
+.tracking-history{list-style:none;margin:10px 0 0;padding:0}
+.tracking-history li{padding:10px 0;border-bottom:1px solid var(--line);font-size:12px}
+.tracking-history small{display:block;color:var(--muted);font-size:10px;margin-top:4px}
+@media(max-width:560px){.header-inner{flex-wrap:wrap}.track-toggle{padding:8px 10px}.tracking-card{padding:0 10px}.tracking-form{flex-direction:column}.tracking-form button{padding:12px}.tracking-meta{grid-template-columns:1fr}}
+</style>
+
 </head>
 <body>
-<header><div class="header-inner"><div class="logo">FO</div><div class="headtxt"><h1 id="brandTitle">FORM ORDER</h1><small id="outletSubtitle">Memuat informasi outlet...</small></div><div class="status" id="statusBadge">● ONLINE</div></div></header>
+<header><div class="header-inner"><div class="logo">DO</div><div class="headtxt"><h1 id="brandTitle">Delivery Order</h1><small id="outletSubtitle">Memuat informasi outlet...</small></div><button type="button" class="track-toggle" onclick="toggleTracking()" aria-expanded="false" id="trackToggle">Lacak Pesanan</button><div class="status" id="statusBadge">● ONLINE</div></div></header>
+
+<section class="tracking-card hidden" id="trackingPanel" aria-label="Lacak pesanan">
+ <div class="tracking-inner">
+  <h2 style="margin:0 0 6px">Lacak Pesanan</h2>
+  <p class="sub" style="margin:0 0 13px">Masukkan nomor order/DO untuk melihat status dan riwayat pesanan.</p>
+  <form class="tracking-form" id="trackingForm">
+   <input id="trackingOrderId" autocomplete="off" placeholder="Contoh: DO-XXXXXXXX" aria-label="Nomor order atau DO" required>
+   <button type="submit" id="trackingSubmit">Lacak Pesanan</button>
+  </form>
+  <div class="tracking-result" id="trackingResult" aria-live="polite"></div>
+ </div>
+</section>
+
 <div class="wrap">
 <main class="main">
  <section class="card" id="outletSelectSection">
@@ -258,6 +290,55 @@ function validateReady(){const t=total(),dp=Number($('dpAmount').value||0),proof
 function fileData(file){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(file);});}
 async function submitOrder(){validateReady();if($('submitBtn').disabled)return;const dp=Number($('dpAmount').value),t=total();if(dp>t){alert('Nominal DP tidak boleh melebihi total pesanan.');return;}const f=$('proof').files[0];if(proofRequired()&&!f){alert('Untuk pembayaran Transfer atau QRIS, wajib upload bukti pembayaran DP.');return;}if(f&&f.size>5*1024*1024){alert('Ukuran bukti pembayaran maksimal 5 MB.');return;}state.busy=true;$('submitBtn').textContent='Mengirim pesanan...';validateReady();try{const items=Object.entries(state.cart).map(([id,qty])=>{const p=state.products.find(x=>String(x.id)===id);return {productId:id,name:p?.name,price:Number(p?.price||0),qty,subtotal:Number(p?.price||0)*qty};});const proof=f?{data:await fileData(f),mimeType:f.type,name:f.name}:null;const body={action:'submitDeliveryOrder',outlet:outletId,token:outletToken,outletName:state.config?.outletName||'',brand:state.config?.brand||'',customer:$('customer').value.trim(),phone:$('phone').value.trim(),orderType:state.orderType,address:$('address').value.trim(),notes:$('notes').value.trim(),requestedDate:$('needDate').value,requestedTime:$('needTime').value,items,total:t,dpAmount:dp,remainingBalance:t-dp,dpPaymentMethod:state.payment,proof,checkoutAt:new Date().toISOString(),userAgent:navigator.userAgent};const res=await fetch(apiBase,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body)});const data=await res.json();if(!data.ok)throw new Error(data.message||'Pesanan gagal disimpan.');$('successInfo').innerHTML=`<b>Nomor DO:</b> ${esc(data.orderId||data.doNumber||'Terkirim')}<br><b>Outlet:</b> ${esc(state.config?.outletName||'Outlet')}<br><b>Total:</b> ${rupiah(t)}<br><b>DP:</b> ${rupiah(dp)}<br><b>Sisa:</b> ${rupiah(t-dp)}<br><b>Status:</b> Menunggu konfirmasi AE`;$('modal').classList.remove('hidden');}catch(e){alert('Pesanan gagal dikirim: '+e.message);console.error(e);}finally{state.busy=false;$('submitBtn').textContent='Kirim Delivery Order';validateReady();}}
 function closeSuccessModal(){ $('modal').classList.add('hidden'); $('afterCheckoutModal').classList.remove('hidden'); }
+
+function toggleTracking(){
+ const panel=$('trackingPanel'),btn=$('trackToggle');
+ const opening=panel.classList.contains('hidden');
+ panel.classList.toggle('hidden',!opening);
+ btn.setAttribute('aria-expanded',String(opening));
+ if(opening){$('trackingOrderId').focus();panel.scrollIntoView({behavior:'smooth',block:'start'});}
+}
+function trackingDate(value){
+ if(!value)return '-';
+ const d=new Date(value);
+ return Number.isNaN(d.getTime())?String(value):d.toLocaleString('id-ID',{dateStyle:'medium',timeStyle:'short'});
+}
+async function trackOrder(orderId){
+ const id=String(orderId||'').trim();
+ if(!id){$('trackingOrderId').focus();return;}
+ if(!apiBase){$('trackingResult').innerHTML='<div class="notice">URL API GAS belum dipasang.</div>';return;}
+ const btn=$('trackingSubmit');btn.disabled=true;btn.textContent='Memeriksa...';
+ $('trackingResult').innerHTML='<div class="notice">Memuat status pesanan...</div>';
+ try{
+  const u=new URL(apiBase,location.href);
+  u.searchParams.set('action','getDeliveryOrderPublicStatus');
+  u.searchParams.set('orderId',id);
+  const response=await fetch(u.toString());
+  if(!response.ok)throw new Error('API gagal ('+response.status+').');
+  const data=await response.json();
+  if(!data.ok||!data.order)throw new Error(data.message||'Pesanan tidak ditemukan.');
+  const o=data.order;
+  const history=Array.isArray(o.history)?o.history:[];
+  const type=String(o.orderType||'').toUpperCase()==='DELIVERY'?'Delivery':'Ambil di resto (Pick up)';
+  const schedule=[o.requestedDate,o.requestedTime].filter(Boolean).join(' · ')||'-';
+  $('trackingResult').innerHTML=`
+   <div class="tracking-status">${esc(o.orderStatus||'Status belum tersedia')}</div>
+   <div class="tracking-meta">
+    <div><small>Nomor order/DO</small><b>${esc(o.orderId||id)}</b></div>
+    <div><small>Outlet</small><b>${esc(o.outletName||'-')}</b></div>
+    <div><small>Tipe pesanan</small><b>${esc(type)}</b></div>
+    <div><small>Jadwal pesanan</small><b>${esc(schedule)}</b></div>
+   </div>
+   ${o.rejectionReason?`<div class="notice"><b>Catatan penolakan:</b> ${esc(o.rejectionReason)}</div>`:''}
+   <b style="font-size:12px">Riwayat status</b>
+   ${history.length?`<ul class="tracking-history">${history.map(h=>`<li><b>${esc(h.status||'Pembaruan status')}</b><small>${esc(trackingDate(h.at))}</small></li>`).join('')}</ul>`:'<div class="notice">Belum ada riwayat status.</div>'}
+  `;
+ }catch(e){
+  $('trackingResult').innerHTML=`<div class="notice">${esc(e.message||'Gagal memuat status pesanan.')}</div>`;
+ }finally{btn.disabled=false;btn.textContent='Lacak Pesanan';}
+}
+$('trackingForm').addEventListener('submit',e=>{e.preventDefault();trackOrder($('trackingOrderId').value);});
+
 function outletRows(data){const rows=data?.outlets||data?.data||data?.items||[];return Array.isArray(rows)?rows:[];}
 function outletValue(o){return String(o.outletCode??o.outletId??o.id??o.code??o.outlet??o.username??'');}
 function outletLabel(o){return String(o.outletName??o.name??o.resto??o.outlet??o.username??outletValue(o));}
